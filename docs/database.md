@@ -21,50 +21,51 @@ goals  1 ── * advices (どの目標に対する提案か紐付け)
 
 Supabase Authが管理するユーザーテーブルをベースに利用する(認証情報自体はSupabase Auth側が保持)。Pacely独自のプロフィール情報のみ、拡張テーブルとして持つ。
 
-| カラム名 | 型 | 説明 |
-|---|---|---|
-| id | uuid (PK) | Supabase Authのuser idと同一 |
-| region | varchar | 天候取得用の地域(都道府県/市) |
-| created_at | timestamp | 作成日時 |
+| カラム名   | 型        | 説明                          |
+| ---------- | --------- | ----------------------------- |
+| id         | uuid (PK) | Supabase Authのuser idと同一  |
+| region     | varchar   | 天候取得用の地域(都道府県/市) |
+| created_at | timestamp | 作成日時                      |
 
 ### 3.2 runs(ランニング記録)
 
-| カラム名 | 型 | 説明 |
-|---|---|---|
-| id | uuid (PK) | |
-| user_id | uuid (FK → users.id) | |
-| distance_km | numeric | 距離(km) |
-| duration_sec | integer | 所要時間(秒) |
-| pace_sec_per_km | numeric | ペース(自動計算・保存する。distance/durationから算出するが、毎回計算せず保存しておくことで一覧表示のクエリを軽くする) |
-| run_date | date | 走った日付 |
-| created_at | timestamp | 記録作成日時 |
+| カラム名        | 型                   | 説明                                                                                                                                      |
+| --------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| id              | uuid (PK)            |                                                                                                                                           |
+| user_id         | uuid (FK → users.id) |                                                                                                                                           |
+| distance_km     | numeric              | 距離(km)                                                                                                                                  |
+| duration_sec    | integer              | 所要時間(秒)                                                                                                                              |
+| pace_sec_per_km | numeric              | ペース(自動計算・保存する。distance/durationから算出するが、毎回計算せず保存しておくことで一覧表示のクエリを軽くする)                     |
+| rpe             | integer (nullable)   | 体感的きつさ(Rate of Perceived Exertion)。1〜10で自己申告。AIへの入力材料として使う(同じペースでもきつさが違えば疲労蓄積の判断材料になる) |
+| run_date        | date                 | 走った日付                                                                                                                                |
+| created_at      | timestamp            | 記録作成日時                                                                                                                              |
 
 ### 3.3 goals(目標)
 
-| カラム名 | 型 | 説明 |
-|---|---|---|
-| id | uuid (PK) | |
-| user_id | uuid (FK → users.id) | |
-| goal_type | varchar | 例: "full_marathon", "half_marathon" |
-| target_time_sec | integer | 目標タイム(秒) |
-| target_date | date | 目標達成予定日(レース日など) |
-| status | varchar | "active" / "achieved" / "abandoned" |
-| created_at | timestamp | |
+| カラム名        | 型                   | 説明                                 |
+| --------------- | -------------------- | ------------------------------------ |
+| id              | uuid (PK)            |                                      |
+| user_id         | uuid (FK → users.id) |                                      |
+| goal_type       | varchar              | 例: "full_marathon", "half_marathon" |
+| target_time_sec | integer              | 目標タイム(秒)                       |
+| target_date     | date                 | 目標達成予定日(レース日など)         |
+| status          | varchar              | "active" / "achieved" / "abandoned"  |
+| created_at      | timestamp            |                                      |
 
 - **現在有効な目標**は `status = 'active'` のレコード(基本的に1ユーザーにつき1件のみ運用。バックエンド側のservice層でこの制約を担保する)
 - 達成・断念した場合は新規INSERTせず、既存レコードのstatusを更新し、新しい目標は別レコードとしてINSERTする(履歴として残る)
 
 ### 3.4 advices(AI提案)
 
-| カラム名 | 型 | 説明 |
-|---|---|---|
-| id | uuid (PK) | |
-| user_id | uuid (FK → users.id) | |
-| goal_id | uuid (FK → goals.id, nullable) | どの目標に対する提案か(目標未設定時はnull) |
-| advice_text | text | AIによるアドバイス本文 |
-| next_menu | jsonb | 次回練習メニュー(構造化データ。例: `{"distance_km": 10, "pace_sec_per_km": 330, "note": "..."}`) |
-| weather_context | jsonb | 生成時に参照した天候情報(後から「なぜこの提案になったか」を追える) |
-| generated_at | timestamp | 生成日時(この値をもとに「24時間以内かどうか」を判定する) |
+| カラム名        | 型                             | 説明                                                                                             |
+| --------------- | ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| id              | uuid (PK)                      |                                                                                                  |
+| user_id         | uuid (FK → users.id)           |                                                                                                  |
+| goal_id         | uuid (FK → goals.id, nullable) | どの目標に対する提案か(目標未設定時はnull)                                                       |
+| advice_text     | text                           | AIによるアドバイス本文                                                                           |
+| next_menu       | jsonb                          | 次回練習メニュー(構造化データ。例: `{"distance_km": 10, "pace_sec_per_km": 330, "note": "..."}`) |
+| weather_context | jsonb                          | 生成時に参照した天候情報(後から「なぜこの提案になったか」を追える)                               |
+| generated_at    | timestamp                      | 生成日時(この値をもとに「24時間以内かどうか」を判定する)                                         |
 
 - 最新の提案は `ORDER BY generated_at DESC LIMIT 1` で取得
 - 履歴一覧はuser_idで絞り込んで時系列表示する
