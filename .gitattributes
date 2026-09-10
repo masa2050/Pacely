@@ -1,0 +1,8 @@
+# 改行コードをリポジトリ内では LF に統一する。
+# これで Windows/Mac/Linux 混在でも差分が汚れず、"LF will be replaced by CRLF" 警告も消える。
+* text=auto eol=lf
+
+# バイナリは触らない
+*.png binary
+*.jpg binary
+*.svg text eol=lf
