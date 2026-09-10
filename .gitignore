@@ -1,0 +1,26 @@
+# 環境変数(APIキー等は絶対にコミットしない)
+.env
+.env.local
+*.env
+
+# Go
+/backend/bin/
+/backend/tmp/
+*.exe
+*.test
+*.out
+
+# Node / フロントエンド
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# エディタ / OS
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+
+# Docker のローカルデータ(名前付きボリュームを使うので通常は不要だが念のため)
+/pgdata/
