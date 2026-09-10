@@ -4,13 +4,16 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+
+	"github.com/masa2050/pacely/backend/internal/config"
+	"github.com/masa2050/pacely/backend/internal/handler"
+	appmw "github.com/masa2050/pacely/backend/internal/middleware"
 )
 
 func main() {
@@ -24,9 +27,9 @@ func main() {
 		}
 	}
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		log.Fatal("環境変数 DATABASE_URL が未設定です")
+	cfg, err := config.Load()
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	// 起動時にDBへ接続し、疎通確認(Ping)する。
@@ -34,7 +37,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, dbURL)
+	pool, err := pgxpool.New(ctx, cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("DB接続プールの作成に失敗: %v", err)
 	}
@@ -49,7 +52,7 @@ func main() {
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 
-	// ヘルスチェック: サーバ生存 + DB疎通をまとめて確認できるようにする。
+	// ヘルスチェック: 認証不要。サーバ生存 + DB疎通をまとめて確認できるようにする。
 	e.GET("/health", func(c echo.Context) error {
 		pingCtx, pingCancel := context.WithTimeout(c.Request().Context(), 2*time.Second)
 		defer pingCancel()
@@ -66,12 +69,15 @@ func main() {
 		})
 	})
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
-	}
-	log.Printf("サーバ起動: http://localhost:%s", port)
-	if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
+	// 認証が必要なルートは api グループにまとめる。
+	userHandler := handler.NewUserHandler()
+
+	api := e.Group("")
+	api.Use(appmw.JWTAuth(cfg.SupabaseJWTSecret))
+	api.GET("/users/me", userHandler.GetMe)
+
+	log.Printf("サーバ起動: http://localhost:%s", cfg.Port)
+	if err := e.Start(":" + cfg.Port); err != nil && err != http.ErrServerClosed {
 		log.Fatalf("サーバ起動に失敗: %v", err)
 	}
 }
