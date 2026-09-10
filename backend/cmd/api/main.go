@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/MicahParks/keyfunc/v3"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
@@ -69,11 +70,19 @@ func main() {
 		})
 	})
 
+	// Supabase Auth の公開鍵(JWKS)を取得する。取得後はライブラリが定期的に
+	// 鍵をリフレッシュする(鍵ローテーションに追従するため)。
+	jwks, err := keyfunc.NewDefault([]string{cfg.JWKSURL()})
+	if err != nil {
+		log.Fatalf("JWKS の取得に失敗: %v", err)
+	}
+	log.Println("JWKS 取得OK")
+
 	// 認証が必要なルートは api グループにまとめる。
 	userHandler := handler.NewUserHandler()
 
 	api := e.Group("")
-	api.Use(appmw.JWTAuth(cfg.SupabaseJWTSecret))
+	api.Use(appmw.JWTAuth(jwks.Keyfunc))
 	api.GET("/users/me", userHandler.GetMe)
 
 	log.Printf("サーバ起動: http://localhost:%s", cfg.Port)

@@ -5,28 +5,29 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Config struct {
-	DatabaseURL      string
-	Port             string
-	SupabaseJWTSecret string
+	DatabaseURL string
+	Port        string
+	SupabaseURL string
 }
 
 // Load は環境変数から設定を読み込む。必須項目が欠けていればエラーを返す。
 func Load() (*Config, error) {
 	cfg := &Config{
-		DatabaseURL:       os.Getenv("DATABASE_URL"),
-		Port:              os.Getenv("PORT"),
-		SupabaseJWTSecret: os.Getenv("SUPABASE_JWT_SECRET"),
+		DatabaseURL: os.Getenv("DATABASE_URL"),
+		Port:        os.Getenv("PORT"),
+		SupabaseURL: strings.TrimRight(os.Getenv("SUPABASE_URL"), "/"),
 	}
 
 	var missing []string
 	if cfg.DatabaseURL == "" {
 		missing = append(missing, "DATABASE_URL")
 	}
-	if cfg.SupabaseJWTSecret == "" {
-		missing = append(missing, "SUPABASE_JWT_SECRET")
+	if cfg.SupabaseURL == "" {
+		missing = append(missing, "SUPABASE_URL")
 	}
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("必須の環境変数が未設定です: %v", missing)
@@ -36,4 +37,10 @@ func Load() (*Config, error) {
 		cfg.Port = "8080"
 	}
 	return cfg, nil
+}
+
+// JWKSURL は Supabase Auth の公開鍵(JWKS)エンドポイントURLを返す。
+// Supabase の JWT は ES256(非対称鍵)で署名されており、この公開鍵で検証する。
+func (c *Config) JWKSURL() string {
+	return c.SupabaseURL + "/auth/v1/.well-known/jwks.json"
 }

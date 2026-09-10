@@ -15,15 +15,24 @@ const ContextUserIDKey = "user_id"
 
 // JWTAuth は Supabase Auth が発行した JWT を検証するミドルウェアを返す。
 //
+// keyfn には JWKS(公開鍵)から署名検証用の鍵を返す関数を渡す(main で組み立てる)。
+// Supabase の JWT は ES256(非対称鍵)で署名されているため、共有シークレットではなく
+// 公開鍵で検証する。
+//
 // 検証内容:
 //   - Authorization ヘッダーが "Bearer <token>" 形式か
-//   - 署名アルゴリズムが HS256 か(アルゴリズム混同攻撃を防ぐため明示的にチェック)
-//   - Supabase の JWT Secret による署名が正しいか
-//   - 有効期限(exp)が切れていないか ... jwt ライブラリが自動で検証
+//   - 署名アルゴリズムが ES256 か(アルゴリズム混同攻撃を防ぐため明示的に制限)
+//   - JWKS の公開鍵による署名が正しいか
+//   - 有効期限(exp)が切れていないか
+//   - aud クレームが "authenticated" か(Supabase のログイン済みユーザー)
 //
 // 検証に成功したら sub クレーム(= Supabase の user id)をコンテキストに入れる。
-func JWTAuth(jwtSecret string) echo.MiddlewareFunc {
-	secret := []byte(jwtSecret)
+func JWTAuth(keyfn jwt.Keyfunc) echo.MiddlewareFunc {
+	parser := jwt.NewParser(
+		jwt.WithValidMethods([]string{"ES256"}),
+		jwt.WithAudience("authenticated"),
+		jwt.WithExpirationRequired(),
+	)
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -38,20 +47,10 @@ func JWTAuth(jwtSecret string) echo.MiddlewareFunc {
 			}
 			tokenString := parts[1]
 
-			token, err := jwt.Parse(tokenString, func(t *jwt.Token) (interface{}, error) {
-				// アルゴリズム混同攻撃対策: HS256 以外は拒否する
-				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-					return nil, echo.NewHTTPError(http.StatusUnauthorized, "想定外の署名アルゴリズムです")
-				}
-				return secret, nil
-			})
+			claims := jwt.MapClaims{}
+			token, err := parser.ParseWithClaims(tokenString, claims, keyfn)
 			if err != nil || !token.Valid {
 				return echo.NewHTTPError(http.StatusUnauthorized, "トークンが不正です")
-			}
-
-			claims, ok := token.Claims.(jwt.MapClaims)
-			if !ok {
-				return echo.NewHTTPError(http.StatusUnauthorized, "トークンのクレームを読めません")
 			}
 
 			sub, _ := claims["sub"].(string)
