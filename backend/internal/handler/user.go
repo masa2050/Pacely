@@ -4,23 +4,50 @@ package handler
 import (
 	"net/http"
 
-	appmw "github.com/masa2050/pacely/backend/internal/middleware"
 	"github.com/labstack/echo/v4"
+
+	appmw "github.com/masa2050/pacely/backend/internal/middleware"
+	"github.com/masa2050/pacely/backend/internal/service"
 )
 
-type UserHandler struct{}
+type UserHandler struct {
+	service *service.UserService
+}
 
-func NewUserHandler() *UserHandler {
-	return &UserHandler{}
+func NewUserHandler(service *service.UserService) *UserHandler {
+	return &UserHandler{service: service}
 }
 
 // GetMe は GET /users/me。
-// フェーズ1タスク1の時点では、JWT 検証が通っているかの確認用に
-// トークンから取り出した user_id をそのまま返す。
-// タスク2で users テーブルと接続し、region などのプロフィールを返すように差し替える。
 func (h *UserHandler) GetMe(c echo.Context) error {
 	userID, _ := c.Get(appmw.ContextUserIDKey).(string)
-	return c.JSON(http.StatusOK, echo.Map{
-		"id": userID,
-	})
+
+	user, err := h.service.GetOrCreateMe(c.Request().Context(), userID)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "プロフィールの取得に失敗しました")
+	}
+	return c.JSON(http.StatusOK, user)
+}
+
+type updateMeRequest struct {
+	Region string `json:"region"`
+}
+
+// UpdateMe は PUT /users/me。region(天候取得用の地域)を更新する。
+func (h *UserHandler) UpdateMe(c echo.Context) error {
+	userID, _ := c.Get(appmw.ContextUserIDKey).(string)
+
+	var body updateMeRequest
+	if err := c.Bind(&body); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "リクエストボディが不正です")
+	}
+	if body.Region == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "region は必須です")
+	}
+
+	user, err := h.service.UpdateRegion(c.Request().Context(), userID, body.Region)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "プロフィールの更新に失敗しました")
+	}
+	return c.JSON(http.StatusOK, user)
 }

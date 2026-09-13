@@ -7,6 +7,22 @@
 
 ---
 
+## 2026-09-14 フェーズ1: マイグレーション基盤 + usersテーブル + GET/PUT /users/me
+
+- **マイグレーションツール**: `golang-migrate` のCLIを採用(`go install .../cmd/migrate@latest`)。
+  `backend/migrations/` に `NNNNNN_名前.up.sql` / `.down.sql` を置き、
+  `migrate -path migrations -database "$DATABASE_URL" up` で適用する。
+- **usersテーブルの id に auth.users への外部キーを付けなかった**:
+  ローカル開発用DBは素のPostgres(Supabaseのauthスキーマが存在しない)なので、
+  FK制約を付けるとローカルで動かなくなる。整合性はJWT検証(アプリ層)で担保する方針にした。
+  本番のSupabaseでも同じスキーマを使い回せるようにするための判断。
+- **get-or-create方式にした理由**: Supabase Auth側でユーザーが作られても、
+  Pacely独自の `users` テーブルの行は自動生成されない(サインアップ時のWebhook等は
+  MVPでは作らない)。そこで「初回の `GET /users/me` アクセス時に行が無ければ作る」
+  実装にし、フロント側にプロフィール作成専用の処理を増やさないようにした。
+- **確認**: 同じユーザーで `GET /users/me` を2回叩いても行が重複しない(`created_at` が
+  変わらないことで確認)、`PUT /users/me` で `region` 更新、`region` 空文字は400、を確認。
+
 ## 2026-09-11 フェーズ1: JWT検証を HS256 から JWKS(ES256) 方式へ変更
 
 - **状況**: Supabase の「JWT Secret」を使う共有鍵(HS256)方式で検証ミドルウェアを実装したが、

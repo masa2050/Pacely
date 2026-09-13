@@ -15,6 +15,8 @@ import (
 	"github.com/masa2050/pacely/backend/internal/config"
 	"github.com/masa2050/pacely/backend/internal/handler"
 	appmw "github.com/masa2050/pacely/backend/internal/middleware"
+	"github.com/masa2050/pacely/backend/internal/repository"
+	"github.com/masa2050/pacely/backend/internal/service"
 )
 
 func main() {
@@ -78,12 +80,16 @@ func main() {
 	}
 	log.Println("JWKS 取得OK")
 
-	// 認証が必要なルートは api グループにまとめる。
-	userHandler := handler.NewUserHandler()
+	// handler → service → repository の3層構成(docs/architecture.md)。
+	userRepo := repository.NewUserRepository(pool)
+	userService := service.NewUserService(userRepo)
+	userHandler := handler.NewUserHandler(userService)
 
+	// 認証が必要なルートは api グループにまとめる。
 	api := e.Group("")
 	api.Use(appmw.JWTAuth(jwks.Keyfunc))
 	api.GET("/users/me", userHandler.GetMe)
+	api.PUT("/users/me", userHandler.UpdateMe)
 
 	log.Printf("サーバ起動: http://localhost:%s", cfg.Port)
 	if err := e.Start(":" + cfg.Port); err != nil && err != http.ErrServerClosed {
