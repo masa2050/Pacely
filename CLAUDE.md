@@ -13,6 +13,7 @@ Pacelyは、ランニング記録に対して「目標に向けて次に何を�
 - `docs/database.md` — テーブル定義
 - `docs/api.md` — APIエンドポイント設計(特にGET /advices/latestの処理フローは必読)
 - `docs/implementation-plan.md` — 実装フェーズと順序
+- `docs/adr/` — 過去の設計判断の記録(Architecture Decision Record)。新しいセッションで作業を始める際、関連するADRがあれば必ず目を通すこと
 
 ## 技術スタック
 
@@ -37,6 +38,8 @@ Pacelyは、ランニング記録に対して「目標に向けて次に何を�
 5. `GET /advices/latest`はGETだが意図的に副作用(AI呼び出し・DB書き込み)を持つ設計になっている。これは`docs/api.md`に理由を明記した意図的な判断であり、「RESTfulでない」という理由だけで勝手に設計変更しないこと
 6. AI API・天候APIの呼び出しはバックエンドのservice層に閉じ込め、フロントエンドから直接外部APIを呼び出さない
 7. マイグレーションやテーブル変更を行う場合は、必ず`docs/database.md`の内容と整合性を保つ。スキーマを変更したら`docs/database.md`も更新する
+8. **技術選定・設計判断を行った(または変更した)場合は、`docs/adr/`に連番のADR(Architecture Decision Record)ファイルを作成する**。`docs/adr/001-go-instead-of-kotlin-springboot.md`を参考フォーマットとし、背景・検討した選択肢・決定・理由を簡潔にまとめる。会話履歴が残らなくても意図が追えるようにするための記録であり、就活の面接対策も兼ねるため省略しないこと
+9. コミットメッセージは「何をしたか」だけでなく「なぜその実装方針にしたか」を一言添える(例: `feat: 記録一覧APIを実装 (paceは保存時に計算しクエリコストを抑える方針)`)
 
 ## コーディング規約(最低限)
 
