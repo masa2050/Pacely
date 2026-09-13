@@ -54,6 +54,14 @@ func main() {
 	e := echo.New()
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
+	// フロントエンド(Vite開発サーバ/本番Vercel)からのAuthorizationヘッダー付き
+	// リクエストを許可する。ブラウザはこのヘッダーがあるとpreflight(OPTIONS)を
+	// 送るため、CORS設定が無いと "/users/me" などが全滅する。
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: []string{cfg.FrontendOrigin},
+		AllowHeaders: []string{echo.HeaderAuthorization, echo.HeaderContentType},
+		AllowMethods: []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete},
+	}))
 
 	// ヘルスチェック: 認証不要。サーバ生存 + DB疎通をまとめて確認できるようにする。
 	e.GET("/health", func(c echo.Context) error {

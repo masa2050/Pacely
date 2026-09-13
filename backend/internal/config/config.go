@@ -9,17 +9,19 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	Port        string
-	SupabaseURL string
+	DatabaseURL    string
+	Port           string
+	SupabaseURL    string
+	FrontendOrigin string
 }
 
 // Load は環境変数から設定を読み込む。必須項目が欠けていればエラーを返す。
 func Load() (*Config, error) {
 	cfg := &Config{
-		DatabaseURL: os.Getenv("DATABASE_URL"),
-		Port:        os.Getenv("PORT"),
-		SupabaseURL: strings.TrimRight(os.Getenv("SUPABASE_URL"), "/"),
+		DatabaseURL:    os.Getenv("DATABASE_URL"),
+		Port:           os.Getenv("PORT"),
+		SupabaseURL:    strings.TrimRight(os.Getenv("SUPABASE_URL"), "/"),
+		FrontendOrigin: os.Getenv("FRONTEND_ORIGIN"),
 	}
 
 	var missing []string
@@ -35,6 +37,10 @@ func Load() (*Config, error) {
 
 	if cfg.Port == "" {
 		cfg.Port = "8080"
+	}
+	if cfg.FrontendOrigin == "" {
+		// ローカルのVite開発サーバのデフォルトポート。
+		cfg.FrontendOrigin = "http://localhost:5173"
 	}
 	return cfg, nil
 }
