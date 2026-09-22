@@ -38,6 +38,149 @@
   }
 }
 
+/* フェーズ7-2: サイドバー(左)+ダッシュボード(右)を横並びにするレイアウト。
+   #centerが元々flexで全体を中央寄せしているため、その内側で
+   サイドバー幅+コンテンツ幅を確保する専用コンテナとして用意する。 */
+.app-layout {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (min-width: 1024px) {
+  .app-layout {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 24px;
+    max-width: 1080px;
+    margin: 0 auto;
+  }
+}
+
+.sidebar__toggle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+@media (min-width: 1024px) {
+  .sidebar__toggle {
+    display: none;
+  }
+}
+
+.sidebar {
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  max-width: 360px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px;
+}
+
+.sidebar--open {
+  display: flex;
+}
+
+@media (min-width: 1024px) {
+  .sidebar {
+    display: flex;
+    width: 160px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 24px;
+  }
+}
+
+.sidebar__link {
+  font: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-h);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sidebar__link:hover {
+  background: var(--accent-bg);
+}
+
+/* フェーズ7-2: PC幅(1024px〜)ではダッシュボードのカードを3カラムで表示する。
+   Dashboard.tsxのJSX(カードの並び順)は変えず、CSS側のgrid-template-areasだけで
+   配置を切り替える方針(docs/implementation-plan.md 7-2)。SP幅は従来通りflexの縦積み。 */
+@media (min-width: 1024px) {
+  .dashboard,
+  .dashboard:has(.run-list),
+  .dashboard:has(.goal-list) {
+    max-width: 760px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-areas:
+      'header header header'
+      'greeting greeting greeting'
+      'email email email'
+      'error error error'
+      'profile goal advice'
+      'runs progress advice';
+    align-items: start;
+    gap: 16px;
+    text-align: left;
+  }
+
+  .dashboard__header {
+    grid-area: header;
+  }
+
+  .dashboard__greeting {
+    grid-area: greeting;
+  }
+
+  .dashboard__email {
+    grid-area: email;
+  }
+
+  .dashboard__error {
+    grid-area: error;
+  }
+
+  .dashboard__card--profile {
+    grid-area: profile;
+  }
+
+  .dashboard__card--runs {
+    grid-area: runs;
+  }
+
+  .dashboard__card--goal {
+    grid-area: goal;
+  }
+
+  .dashboard__card--progress {
+    grid-area: progress;
+  }
+
+  .dashboard__card--advice {
+    grid-area: advice;
+  }
+}
+
 .auth-form label,
 .dashboard__region-form label,
 .run-form label,
@@ -396,6 +539,31 @@
 .privacy-policy ul {
   margin: 0;
   padding-left: 20px;
+}
+
+.settings {
+  width: 100%;
+  max-width: 480px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings__back {
+  align-self: flex-start;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.settings__placeholder {
+  color: var(--text);
+  font-size: 14px;
 }
 
 @media (max-width: 400px) {

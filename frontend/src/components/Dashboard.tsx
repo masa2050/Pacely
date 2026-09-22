@@ -2,8 +2,6 @@ import { useEffect, useState } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import {
   getMe,
-  updateMyRegion,
-  deleteAccount,
   listRuns,
   listGoals,
   getActiveGoal,
@@ -28,22 +26,16 @@ type Props = {
 // 実際に動くことをUI上で見えるようにする最小限の画面。
 export function Dashboard({ session }: Props) {
   const [me, setMe] = useState<Me | null>(null)
-  const [region, setRegion] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const [runs, setRuns] = useState<Run[]>([])
   const [runsError, setRunsError] = useState<string | null>(null)
   const [goals, setGoals] = useState<Goal[]>([])
   const [activeGoal, setActiveGoal] = useState<Goal | null>(null)
   const [goalsError, setGoalsError] = useState<string | null>(null)
-  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     getMe()
-      .then((data) => {
-        setMe(data)
-        setRegion(data.region ?? '')
-      })
+      .then(setMe)
       .catch((err) => setError(err.message))
 
     listRuns()
@@ -58,37 +50,6 @@ export function Dashboard({ session }: Props) {
       .then(setActiveGoal)
       .catch((err) => setGoalsError(err.message))
   }, [])
-
-  async function handleSaveRegion() {
-    setSaving(true)
-    setError(null)
-    try {
-      const updated = await updateMyRegion(region)
-      setMe(updated)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  // 退会(docs/adr/014)。取り消せない操作なので、確認ダイアログを必ず挟む。
-  // 削除完了後はサーバー側でSupabase Authアカウントごと消えているため、
-  // フロントもsignOutしてログイン画面に戻す。
-  async function handleDeleteAccount() {
-    if (!window.confirm('退会すると、記録・目標・AI提案の履歴がすべて削除され、元に戻せません。本当に退会しますか?')) {
-      return
-    }
-    setDeleting(true)
-    setError(null)
-    try {
-      await deleteAccount()
-      await supabase.auth.signOut()
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-      setDeleting(false)
-    }
-  }
 
   return (
     <div className="dashboard">
@@ -108,7 +69,7 @@ export function Dashboard({ session }: Props) {
       {error && <p className="dashboard__error">{error}</p>}
 
       {me ? (
-        <div className="dashboard__card">
+        <div className="dashboard__card dashboard__card--profile">
           <h2>プロフィール(GET /users/me)</h2>
           <dl>
             <dt>user id</dt>
@@ -118,33 +79,21 @@ export function Dashboard({ session }: Props) {
             <dt>created_at</dt>
             <dd>{me.created_at}</dd>
           </dl>
-
-          <div className="dashboard__region-form">
-            <label>
-              地域(天候取得用)
-              <input
-                value={region}
-                onChange={(e) => setRegion(e.target.value)}
-                placeholder="例: Tokyo"
-              />
-            </label>
-            <button type="button" onClick={handleSaveRegion} disabled={saving}>
-              {saving ? '保存中...' : '保存(PUT /users/me)'}
-            </button>
-          </div>
+          {/* 地域の編集・退会は設定画面に一本化した(フェーズ7-2, Settings.tsx)。
+              ここは表示専用のカードとして残す。 */}
         </div>
       ) : (
         !error && <p>読み込み中...</p>
       )}
 
-      <div className="dashboard__card">
+      <div id="dashboard-runs" className="dashboard__card dashboard__card--runs">
         <h2>ランニング記録</h2>
         {runsError && <p className="dashboard__error">{runsError}</p>}
         <RunForm onSaved={(run) => setRuns((prev) => [run, ...prev])} />
         <RunList runs={runs} onChanged={setRuns} />
       </div>
 
-      <div className="dashboard__card">
+      <div id="dashboard-goals" className="dashboard__card dashboard__card--goal">
         <h2>目標設定</h2>
         {goalsError && <p className="dashboard__error">{goalsError}</p>}
         <GoalList
@@ -165,27 +114,19 @@ export function Dashboard({ session }: Props) {
         />
       </div>
 
-      <div className="dashboard__card">
+      <div className="dashboard__card dashboard__card--progress">
         <h2>進捗確認</h2>
         {/* activeGoalの切り替わりやrunsの増減のたびに進捗を取り直したいので、
             それらをkeyにしてコンポーネントごと再マウントする(簡易的な再取得トリガー)。 */}
         <ProgressView key={`${activeGoal?.id ?? 'none'}-${runs.length}`} />
       </div>
 
-      <div className="dashboard__card">
+      <div id="dashboard-advice" className="dashboard__card dashboard__card--advice">
         <h2>AI提案(GET /advices/latest)</h2>
         {/* activeGoal・runsの変化に応じて再取得したいので、Progressと同様keyで再マウントする。
             ただし取得自体は「前回生成から24時間以内ならキャッシュを返す」ため、
             毎回AIが呼ばれるわけではない(docs/adr/004)。 */}
         <AdviceView key={`${activeGoal?.id ?? 'none'}-${runs.length}`} />
-      </div>
-
-      <div className="dashboard__card dashboard__card--danger">
-        <h2>退会</h2>
-        <p>退会すると、記録・目標・AI提案の履歴を含むすべてのデータが削除され、元に戻せません。</p>
-        <button type="button" onClick={handleDeleteAccount} disabled={deleting}>
-          {deleting ? '処理中...' : '退会する(DELETE /users/me)'}
-        </button>
       </div>
     </div>
   )
