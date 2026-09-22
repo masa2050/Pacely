@@ -38,6 +38,108 @@
   }
 }
 
+/* フェーズ7-2: ナビゲーションメニュー(ハンバーガーボタン+ドロップダウン)。
+   PC幅でも常時表示の固定サイドバーは採用せず、SP/PC共通でヘッダー内の
+   トグルボタンから開閉するだけのシンプルな実装にした(docs/adr/015)。 */
+.sidebar {
+  position: relative;
+  display: inline-flex;
+}
+
+.sidebar__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.sidebar__menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 160px;
+  box-sizing: border-box;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--bg);
+  box-shadow: var(--shadow);
+}
+
+.sidebar__link {
+  font: inherit;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-h);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.sidebar__link:hover {
+  background: var(--accent-bg);
+}
+
+.dashboard__header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dashboard__header-left h1 {
+  margin: 0;
+}
+
+/* フェーズ7-2: PC幅(1024px〜)ではダッシュボードのカードを3カラムで表示する。
+   カード自体の並び順(JSX)は変えず、既存カードを列ごとにグルーピングするラッパー
+   (dashboard__column)を追加した。CSS Gridの行スパンで組むと、カード同士の
+   内容量の差(AI提案は長文になりがち)がそのまま他列の空白になってしまったため、
+   列ごとに高さが独立するFlexboxに変更した(docs/adr/015)。
+   SP幅ではdashboard__columnをdisplay:contentsにして、box-treeから消すことで
+   これまで通りカードが縦一列に並ぶ見た目に戻す。 */
+.dashboard__column {
+  display: contents;
+}
+
+@media (min-width: 1024px) {
+  .dashboard {
+    max-width: 1000px;
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 16px;
+    text-align: left;
+  }
+
+  .dashboard__header,
+  .dashboard__greeting,
+  .dashboard__email,
+  .dashboard__error {
+    flex: 0 0 100%;
+  }
+
+  .dashboard__column {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
 .auth-form label,
 .dashboard__region-form label,
 .run-form label,
@@ -206,11 +308,24 @@
   overflow-x: auto;
 }
 
+.run-list {
+  /* 記録が積み上がるとテーブルの縦の長さに際限が無くなり、ページ全体が
+     どんどん下に伸びてしまうため、一定の高さで縦方向にもスクロールさせる。 */
+  max-height: 360px;
+  overflow-y: auto;
+}
+
 .run-list table,
 .goal-list table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+}
+
+.run-list thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
 }
 
 @media (max-width: 480px) {
@@ -299,16 +414,49 @@
   text-align: left;
 }
 
-.advice-view__card dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  margin: 8px 0 0;
-}
-
 .advice-view__text {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.advice-view__menu {
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.advice-view__menu-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 距離・ペース・合計時間はdt/ddの縦積みにせず、横並びの統計項目として表示する。
+   dl(auto 1fr)のままだと狭い画面でラベルと値が縦に積み上がって間延びしていたため、
+   flexの横並び(折り返しあり)に変更した。 */
+.advice-view__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.advice-view__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 72px;
+}
+
+.advice-view__stat-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.advice-view__stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
 }
 
 .advice-view__note,
@@ -398,26 +546,49 @@
   padding-left: 20px;
 }
 
+.settings {
+  width: 100%;
+  max-width: 480px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.settings__back {
+  align-self: flex-start;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.settings__placeholder {
+  color: var(--text);
+  font-size: 14px;
+}
+
 @media (max-width: 400px) {
   /* dt/ddを横並び(auto 1fr)にしていると、dt側のラベルが長い項目
      (例: 「直近3件の平均ペース」)で幅を取られ、dd側が極端に狭くなって
-     折り返しだらけになる。かなり狭い画面ではdt/ddを縦積みにする。 */
+     折り返しだらけになる。かなり狭い画面ではdt/ddを縦積みにする。
+     (advice-view__cardはフェーズ7-2でdlをやめ、独自の横並びstats表示に変更済み) */
   .dashboard__card dl,
-  .progress-view dl,
-  .advice-view__card dl {
+  .progress-view dl {
     grid-template-columns: 1fr;
     gap: 0 0;
   }
 
   .dashboard__card dt,
-  .progress-view dt,
-  .advice-view__card dt {
+  .progress-view dt {
     margin-top: 6px;
   }
 
   .dashboard__card dt:first-child,
-  .progress-view dt:first-child,
-  .advice-view__card dt:first-child {
+  .progress-view dt:first-child {
     margin-top: 0;
   }
 }
