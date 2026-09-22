@@ -18,8 +18,15 @@
   text-align: center;
 }
 
+.dashboard:has(.run-list),
+.dashboard:has(.goal-list) {
+  max-width: 520px;
+}
+
 .auth-form label,
-.dashboard__region-form label {
+.dashboard__region-form label,
+.run-form label,
+.goal-form label {
   display: flex;
   flex-direction: column;
   gap: 4px;
@@ -28,7 +35,10 @@
 }
 
 .auth-form input,
-.dashboard__region-form input {
+.dashboard__region-form input,
+.run-form input,
+.goal-form input,
+.goal-form select {
   font: inherit;
   padding: 8px 10px;
   border-radius: 6px;
@@ -81,6 +91,12 @@
   font-size: 32px;
 }
 
+.dashboard__greeting {
+  color: var(--text-h);
+  font-size: 15px;
+  margin: 0;
+}
+
 .dashboard__email {
   color: var(--text);
   font-size: 14px;
@@ -97,6 +113,14 @@
   border-radius: 8px;
   padding: 16px;
   text-align: left;
+}
+
+.dashboard__card--danger {
+  border-color: #e5484d;
+}
+
+.dashboard__card--danger button {
+  background: #e5484d;
 }
 
 .dashboard__card dl {
@@ -120,4 +144,222 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.run-form,
+.goal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.run-form__duration,
+.goal-form__duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.run-form__duration input,
+.goal-form__duration input {
+  width: 60px;
+}
+
+.run-form__actions,
+.goal-form__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.run-form__error,
+.run-list__error,
+.goal-form__error,
+.goal-list__error {
+  color: #e5484d;
+  font-size: 14px;
+}
+
+.run-list table,
+.goal-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.run-list th,
+.run-list td,
+.goal-list th,
+.goal-list td {
+  text-align: left;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.run-list button,
+.goal-list button {
+  font: inherit;
+  padding: 4px 8px;
+  margin-right: 4px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.goal-list h3 {
+  margin: 16px 0 8px;
+  font-size: 15px;
+}
+
+.goal-list h3:first-child {
+  margin-top: 0;
+}
+
+.goal-list__active {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.goal-list__actions {
+  display: flex;
+  gap: 4px;
+}
+
+.progress-view__goal {
+  font-size: 14px;
+  margin: 0 0 12px;
+}
+
+.progress-view dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  font-size: 14px;
+  margin: 0;
+}
+
+.progress-view dt {
+  color: var(--text);
+}
+
+.progress-view dd {
+  margin: 0;
+}
+
+.advice-view {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.advice-view__card {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px;
+  text-align: left;
+}
+
+.advice-view__card dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 12px;
+  margin: 8px 0 0;
+}
+
+.advice-view__text {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.advice-view__note,
+.advice-view__weather {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.advice-view__generated-at {
+  color: var(--text);
+  font-size: 12px;
+  margin: 8px 0 0;
+}
+
+.advice-view__actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.advice-view__history {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+}
+
+.app__privacy-link {
+  background: none;
+  border: none;
+  color: var(--text);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+  margin-top: 8px;
+  padding: 0;
+}
+
+.privacy-policy {
+  width: 100%;
+  max-width: 640px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.privacy-policy__back {
+  align-self: flex-start;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.privacy-policy__updated {
+  color: var(--text);
+  font-size: 13px;
+  margin: -8px 0 0;
+}
+
+.privacy-policy h2 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+
+.privacy-policy section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.privacy-policy p,
+.privacy-policy li {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-h);
+}
+
+.privacy-policy ul {
+  margin: 0;
+  padding-left: 20px;
 }

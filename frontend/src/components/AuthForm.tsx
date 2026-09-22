@@ -2,10 +2,10 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 
-type Mode = 'login' | 'signup'
+type Mode = 'login' | 'signup' | 'reset-request'
 
-// サインアップ・ログインはSupabase Auth SDKをフロントから直接呼ぶ設計(docs/api.md 2.1)。
-// Pacelyバックエンドには認証専用エンドポイントを作らない。
+// サインアップ・ログイン・パスワード再設定依頼はSupabase Auth SDKをフロントから
+// 直接呼ぶ設計(docs/api.md 2.1)。Pacelyバックエンドには認証専用エンドポイントを作らない。
 export function AuthForm() {
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
@@ -17,6 +17,23 @@ export function AuthForm() {
     e.preventDefault()
     setMessage(null)
     setSubmitting(true)
+
+    if (mode === 'reset-request') {
+      // redirectTo に window.location.origin を使うことで、ローカル(localhost:5173)・
+      // 本番(Vercelドメイン)どちらでもコード変更なしにリンク先を切り替えられる。
+      // Supabase側の Authentication > URL Configuration の Redirect URLs に
+      // 両方のオリジンを許可リスト登録しておく必要がある(docs/adr/010参照)。
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: window.location.origin,
+      })
+      setSubmitting(false)
+      if (error) {
+        setMessage(error.message)
+        return
+      }
+      setMessage('パスワード再設定用のメールを送信しました。メール内のリンクから新しいパスワードを設定してください。')
+      return
+    }
 
     const { error } =
       mode === 'login'
@@ -39,7 +56,7 @@ export function AuthForm() {
     <form className="auth-form" onSubmit={handleSubmit}>
       <h1>Pacely</h1>
       <p className="auth-form__subtitle">
-        {mode === 'login' ? 'ログイン' : '新規登録'}
+        {mode === 'login' ? 'ログイン' : mode === 'signup' ? '新規登録' : 'パスワード再設定'}
       </p>
 
       <label>
@@ -53,23 +70,44 @@ export function AuthForm() {
         />
       </label>
 
-      <label>
-        パスワード
-        <input
-          type="password"
-          required
-          minLength={6}
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-        />
-      </label>
+      {mode !== 'reset-request' && (
+        <label>
+          パスワード
+          <input
+            type="password"
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+          />
+        </label>
+      )}
 
       {message && <p className="auth-form__message">{message}</p>}
 
       <button type="submit" disabled={submitting}>
-        {submitting ? '処理中...' : mode === 'login' ? 'ログイン' : '登録する'}
+        {submitting
+          ? '処理中...'
+          : mode === 'login'
+            ? 'ログイン'
+            : mode === 'signup'
+              ? '登録する'
+              : '再設定メールを送信する'}
       </button>
+
+      {mode === 'login' && (
+        <button
+          type="button"
+          className="auth-form__switch"
+          onClick={() => {
+            setMode('reset-request')
+            setMessage(null)
+          }}
+        >
+          パスワードをお忘れですか?
+        </button>
+      )}
 
       <button
         type="button"
