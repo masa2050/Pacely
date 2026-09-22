@@ -56,6 +56,7 @@
 | -------- | --------- | ------------------------------------------------------ |
 | GET      | /users/me | 自分のプロフィール(regionなど)を取得                   |
 | PUT      | /users/me | regionなどのプロフィール更新(天候取得地域の設定に使用) |
+| DELETE   | /users/me | 退会。Pacely独自データ(runs/goals/advices含む)とSupabase Authアカウントを削除する(docs/adr/014) |
 
 ## 3. GET /advices/latest の処理フロー(重要)
 

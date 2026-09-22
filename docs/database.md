@@ -82,3 +82,4 @@ Supabase Authが管理するユーザーテーブルをベースに利用する(
 
 - `pace_sec_per_km` はdistanceとdurationから計算可能な値だが、あえてrunsテーブルに保存する(一覧表示のたびに計算し直すコストを避けるため)。これは正規化を崩す判断だが、読み取り頻度の高さを優先した意図的なトレードオフ
 - `next_menu` と `weather_context` をjsonb型にしているのは、AIの出力構造が今後変わる可能性が高く、カラムを都度追加するより柔軟に対応できるようにするため。ただし検索条件には使わない想定(あくまで表示用データ)
+- `runs.user_id`・`goals.user_id`・`advices.user_id`・`advices.goal_id`の外部キーは`ON DELETE CASCADE`にしている(migrations/000005)。退会機能(`DELETE /users/me`)で`users`行を削除した際、関連する記録・目標・AI提案がアプリ側で1テーブルずつ削除しなくても自動的に消える(docs/adr/014)

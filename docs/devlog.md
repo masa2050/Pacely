@@ -7,6 +7,60 @@
 
 ---
 
+## 2026-09-22 フェーズ6: 本番デプロイ(Vercel/Railway)でのトラブル3連発
+
+- **状況**: フェーズ6でVercel(FE)・Railway(BE)へ初回デプロイし、本番URLでログイン後の
+  動作確認をしていた。「ログイン後に `Unexpected token '<', "<!doctype "... is not valid JSON`」
+  というエラーが発生。
+
+- **問題1: `VITE_API_BASE_URL` のスキーム抜け**
+  - **原因**: Vercelの環境変数に `pacely-production.up.railway.app`(先頭の`https://`なし)を
+    設定していた。`api.ts`は `${API_BASE_URL}${path}` という単純な文字列結合でURLを組み立てて
+    いるため、スキームが無いとブラウザはこれを「相対パス」と解釈し、
+    `https://<フロントのドメイン>/pacely-production.up.railway.app/users/me` という壊れた
+    URLへリクエストしてしまう。
+  - **さらに**: 壊れたそのパスは、直前に追加していた`vercel.json`の
+    `"rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]`(SPA用キャッチオール)
+    に引っかかり、`index.html`(HTML)がそのまま返ってくる。それを`res.json()`でパースしようと
+    して`Unexpected token '<'`エラーになっていた。
+  - **対応**: `VITE_API_BASE_URL` を `https://pacely-production.up.railway.app`(スキーム付き)
+    に修正。
+  - **学び**: フロントのURL組み立てを単純な文字列結合にしていると、環境変数の値のちょっとした
+    表記ミス(スキーム抜け)がエラーメッセージ上は全く別の場所(JSON parse error)に見える形で
+    表面化する。エラーメッセージだけでなく、実際のRequest URLをNetworkタブで確認するのが
+    結局一番早い。
+
+- **問題2: Vercelの環境変数を`Secret`で保存すると`Config`に変更できない**
+  - **原因**: 環境変数追加時、Typeを`Secret`のまま保存してしまった。Vercelの仕様上
+    `Secret`は書き込み専用(write-only)になり、後から`Config`(通常の公開可能な値)に
+    変更できない。`VITE_`接頭辞の値はブラウザに露出する前提のものなので、本来`Config`で
+    持つべきだった。
+  - **対応**: 一度削除して、Typeを`Config`にして作り直した。
+  - **学び**: `VITE_`(や他フレームワークの`NEXT_PUBLIC_`等)接頭辞の値は「公開されることが
+    前提の値」なので、Secret種別で保存するとかえって身動きが取れなくなる。保存前にTypeを
+    確認する癖をつける。
+
+- **問題3: RailwayのCORS許可オリジンに末尾スラッシュが付いていた**
+  - **状況**: 問題1・2を直しても`Failed to fetch`(CORSエラー)が発生。
+  - **原因**: Railwayの`FRONTEND_ORIGIN`環境変数に`https://pacely-lake.vercel.app/`
+    (末尾スラッシュ付き)を設定していた。ブラウザが送る`Origin`ヘッダーは常に
+    スキーム+ホストのみで末尾スラッシュを含まないため、バックエンド側の完全一致比較
+    (`middleware.CORSWithConfig`の`AllowOrigins`)で不一致になり弾かれていた。
+  - **副次的な混乱**: Vercelの「Deployments」一覧から「Visit」で開くと、固定の本番ドメイン
+    (`pacely-lake.vercel.app`)ではなく、デプロイ固有のランダムなURL
+    (`pacely-xxxxxxxx-<team>.vercel.app`)が開くため、一瞬「まだ反映されていない別のビルドを
+    見ているのでは」と誤解しかけた。実際は中身は同じ最新ビルドで、URLが違うだけだった。
+  - **対応**: `FRONTEND_ORIGIN`から末尾スラッシュを削除。固定の本番ドメイン
+    (`pacely-lake.vercel.app`)でアクセスして確認した。
+  - **学び**: CORSの`AllowOrigins`は完全一致(パスやスラッシュも含めて)である点を忘れがち。
+    環境変数にURLを設定するときは、末尾スラッシュの有無をコピペ元と揃える意識が必要。
+
+- **総括の学び**: 本番デプロイで起きたトラブルは3つとも、コード自体のバグではなく
+  「環境変数の表記ゆれ」(スキーム抜け・Type選択ミス・末尾スラッシュ)が原因だった。
+  ローカル開発では`.env`を直接書くので気づきにくいが、本番デプロイでは環境変数の値を
+  UI経由で手入力するため、こうした表記ミスが起きやすい。次回以降は設定直後に
+  ブラウザの開発者ツール(Networkタブ)でRequest URLとCORSエラーの有無を必ず確認する。
+
 ## 2026-09-14 フェーズ1: FE認証画面 + CORS設定漏れ
 
 - **状況**: ログイン/サインアップ画面を実装し、ブラウザで動作確認しようとした。
