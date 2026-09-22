@@ -103,7 +103,10 @@ type GeminiClient struct {
 }
 
 func NewGeminiClient(apiKey string) *GeminiClient {
-	return &GeminiClient{apiKey: apiKey, httpClient: &http.Client{Timeout: 30 * time.Second}}
+	// 無料枠はピーク時に他の利用者と処理能力を共有するため、応答が遅延することがある
+	// (2026-09-22 本番で30秒ちょうどでのタイムアウトを確認、devlog参照)。無料枠を使い続ける前提の
+	// 暫定対応として60秒に延長する。根本対応ではなく、頻発するようなら有料ティアへの切り替えを検討する。
+	return &GeminiClient{apiKey: apiKey, httpClient: &http.Client{Timeout: 60 * time.Second}}
 }
 
 type geminiRequest struct {
