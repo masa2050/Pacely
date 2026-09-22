@@ -51,3 +51,14 @@ func (h *UserHandler) UpdateMe(c echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, user)
 }
+
+// DeleteMe は DELETE /users/me(退会)。
+// Pacely独自データの削除とSupabase Authアカウントの削除まで行う(docs/adr/014)。
+func (h *UserHandler) DeleteMe(c echo.Context) error {
+	userID, _ := c.Get(appmw.ContextUserIDKey).(string)
+
+	if err := h.service.DeleteAccount(c.Request().Context(), userID); err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "退会処理に失敗しました")
+	}
+	return c.NoContent(http.StatusNoContent)
+}

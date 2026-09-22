@@ -90,14 +90,53 @@ func main() {
 
 	// handler → service → repository の3層構成(docs/architecture.md)。
 	userRepo := repository.NewUserRepository(pool)
-	userService := service.NewUserService(userRepo)
+	// 退会機能(DELETE /users/me)でSupabase Auth管理者APIを呼ぶため、
+	// SupabaseURL・ServiceRoleKeyを注入する(docs/adr/014)。
+	userService := service.NewUserService(userRepo, cfg.SupabaseURL, cfg.SupabaseServiceRoleKey)
 	userHandler := handler.NewUserHandler(userService)
+
+	runRepo := repository.NewRunRepository(pool)
+	// RunServiceはusersテーブルのget-or-createにUserServiceを使う
+	// (docs/adr/007-users-profile-sync-strategy.md)。
+	runService := service.NewRunService(runRepo, userService)
+	runHandler := handler.NewRunHandler(runService)
+
+	goalRepo := repository.NewGoalRepository(pool)
+	// GoalServiceもrunsと同じget-or-createパターンを踏襲する(docs/adr/008)。
+	// 進捗(フェーズ4)の平均ペース算出にrunRepoも必要なため合わせて渡す。
+	goalService := service.NewGoalService(goalRepo, userService, runRepo)
+	goalHandler := handler.NewGoalHandler(goalService)
+
+	adviceRepo := repository.NewAdviceRepository(pool)
+	// 天候・AI呼び出しはインターフェース越しに注入する(docs/architecture.md 7.)。
+	// 開発段階のAI実装はGemini(docs/adr/002)。
+	weatherClient := service.NewOpenWeatherMapClient(cfg.OpenWeatherMapAPIKey)
+	aiClient := service.NewGeminiClient(cfg.GeminiAPIKey)
+	adviceService := service.NewAdviceService(adviceRepo, userService, runRepo, goalRepo, weatherClient, aiClient)
+	adviceHandler := handler.NewAdviceHandler(adviceService)
 
 	// 認証が必要なルートは api グループにまとめる。
 	api := e.Group("")
 	api.Use(appmw.JWTAuth(jwks.Keyfunc))
 	api.GET("/users/me", userHandler.GetMe)
 	api.PUT("/users/me", userHandler.UpdateMe)
+	api.DELETE("/users/me", userHandler.DeleteMe)
+
+	api.POST("/runs", runHandler.Create)
+	api.GET("/runs", runHandler.List)
+	api.GET("/runs/:id", runHandler.Get)
+	api.PUT("/runs/:id", runHandler.Update)
+	api.DELETE("/runs/:id", runHandler.Delete)
+
+	api.POST("/goals", goalHandler.Create)
+	api.GET("/goals", goalHandler.List)
+	api.GET("/goals/active", goalHandler.GetActive)
+	api.GET("/goals/active/progress", goalHandler.GetProgress)
+	api.PUT("/goals/:id", goalHandler.Update)
+	api.PATCH("/goals/:id/status", goalHandler.UpdateStatus)
+
+	api.GET("/advices/latest", adviceHandler.GetLatest)
+	api.GET("/advices", adviceHandler.List)
 
 	log.Printf("サーバ起動: http://localhost:%s", cfg.Port)
 	if err := e.Start(":" + cfg.Port); err != nil && err != http.ErrServerClosed {

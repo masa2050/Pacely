@@ -47,6 +47,14 @@ func (r *UserRepository) Create(ctx context.Context, id string) (*model.User, er
 	return &u, nil
 }
 
+// Delete はusers行を削除する。runs/goals/advicesの関連行はDB側の
+// ON DELETE CASCADE(migrations/000005)で自動的に削除される。
+// 対象行が無くてもエラーにしない(退会APIの再試行に対して冪等にするため)。
+func (r *UserRepository) Delete(ctx context.Context, id string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
+	return err
+}
+
 func (r *UserRepository) UpdateRegion(ctx context.Context, id string, region string) (*model.User, error) {
 	var u model.User
 	row := r.pool.QueryRow(ctx,
