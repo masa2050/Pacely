@@ -23,6 +23,21 @@
   max-width: 520px;
 }
 
+/* PC幅では、モバイル前提の360/520px制約のままだと画面の大半が余白になって
+   しまうため、カード自体の横幅を広げる。ただし読みやすさを崩さないよう
+   text-alignなどレイアウトの構造自体は変えず、幅の上限だけ引き上げる方針。 */
+@media (min-width: 768px) {
+  .auth-form,
+  .dashboard {
+    max-width: 480px;
+  }
+
+  .dashboard:has(.run-list),
+  .dashboard:has(.goal-list) {
+    max-width: 720px;
+  }
+}
+
 .auth-form label,
 .dashboard__region-form label,
 .run-form label,
@@ -158,6 +173,7 @@
 .goal-form__duration {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 4px;
   font-size: 14px;
 }
@@ -181,11 +197,29 @@
   font-size: 14px;
 }
 
+.run-list,
+.goal-list {
+  /* 狭い画面では列数(記録は5列)がカード幅に収まらず、tableは
+     width:100%を指定していてもmin-content分は縮まずページ全体が横に
+     はみ出して崩れる。テーブルだけを横スクロール可能にして、
+     カード自体・ページ全体のレイアウトは崩さないようにする。 */
+  overflow-x: auto;
+}
+
 .run-list table,
 .goal-list table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+}
+
+@media (max-width: 480px) {
+  .run-list table,
+  .goal-list table {
+    /* 480px以下では5列(記録)がどうしても窮屈になるため、テーブル自体は
+       内容に必要な最小幅を確保し、上のoverflow-x: autoでスクロールさせる */
+    min-width: 420px;
+  }
 }
 
 .run-list th,
@@ -362,4 +396,28 @@
 .privacy-policy ul {
   margin: 0;
   padding-left: 20px;
+}
+
+@media (max-width: 400px) {
+  /* dt/ddを横並び(auto 1fr)にしていると、dt側のラベルが長い項目
+     (例: 「直近3件の平均ペース」)で幅を取られ、dd側が極端に狭くなって
+     折り返しだらけになる。かなり狭い画面ではdt/ddを縦積みにする。 */
+  .dashboard__card dl,
+  .progress-view dl,
+  .advice-view__card dl {
+    grid-template-columns: 1fr;
+    gap: 0 0;
+  }
+
+  .dashboard__card dt,
+  .progress-view dt,
+  .advice-view__card dt {
+    margin-top: 6px;
+  }
+
+  .dashboard__card dt:first-child,
+  .progress-view dt:first-child,
+  .advice-view__card dt:first-child {
+    margin-top: 0;
+  }
 }
