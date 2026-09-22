@@ -7,17 +7,46 @@ function formatPace(paceSecPerKm: number): string {
   return `${min}:${String(sec).padStart(2, '0')}/km`
 }
 
+// 合計時間(distance_km * pace_sec_per_km)を表示用に整形する。
+// RunForm(時間入力欄)と同様「時間/分/秒」の単位表記に合わせる。
+function formatDuration(totalSec: number): string {
+  const sec = Math.round(totalSec)
+  const h = Math.floor(sec / 3600)
+  const m = Math.floor((sec % 3600) / 60)
+  const s = sec % 60
+  if (h > 0) return `${h}時間${m}分`
+  if (m > 0) return s > 0 ? `${m}分${s}秒` : `${m}分`
+  return `${s}秒`
+}
+
 function AdviceCard({ advice }: { advice: Advice }) {
+  const { distance_km, pace_sec_per_km, note } = advice.next_menu
   return (
     <div className="advice-view__card">
       <p className="advice-view__text">{advice.advice_text}</p>
-      <dl>
-        <dt>次回練習メニュー</dt>
-        <dd>
-          {advice.next_menu.distance_km}km / {formatPace(advice.next_menu.pace_sec_per_km)}
-        </dd>
-        {advice.next_menu.note && <dd className="advice-view__note">{advice.next_menu.note}</dd>}
-      </dl>
+
+      {/* 「次回」だと誤解を招く(このメニューはその日の24時間キャッシュ対象、docs/adr/004)ため
+          「本日の練習メニュー」と表記する。距離・ペース・合計時間はdt/ddの縦積みではなく
+          横並びの統計表示にして、狭い画面でも縦に間延びしないようにする。 */}
+      <div className="advice-view__menu">
+        <p className="advice-view__menu-label">本日の練習メニュー</p>
+        <div className="advice-view__stats">
+          <div className="advice-view__stat">
+            <span className="advice-view__stat-label">距離</span>
+            <span className="advice-view__stat-value">{distance_km}km</span>
+          </div>
+          <div className="advice-view__stat">
+            <span className="advice-view__stat-label">ペース</span>
+            <span className="advice-view__stat-value">{formatPace(pace_sec_per_km)}</span>
+          </div>
+          <div className="advice-view__stat">
+            <span className="advice-view__stat-label">合計時間</span>
+            <span className="advice-view__stat-value">{formatDuration(distance_km * pace_sec_per_km)}</span>
+          </div>
+        </div>
+        {note && <p className="advice-view__note">{note}</p>}
+      </div>
+
       {advice.weather_context.has_weather && (
         <p className="advice-view__weather">
           生成時の天候: {advice.weather_context.description} / 気温{advice.weather_context.temp_c}℃

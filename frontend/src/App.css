@@ -310,11 +310,24 @@
   overflow-x: auto;
 }
 
+.run-list {
+  /* 記録が積み上がるとテーブルの縦の長さに際限が無くなり、ページ全体が
+     どんどん下に伸びてしまうため、一定の高さで縦方向にもスクロールさせる。 */
+  max-height: 360px;
+  overflow-y: auto;
+}
+
 .run-list table,
 .goal-list table {
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
+}
+
+.run-list thead th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
 }
 
 @media (max-width: 480px) {
@@ -403,16 +416,49 @@
   text-align: left;
 }
 
-.advice-view__card dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 4px 12px;
-  margin: 8px 0 0;
-}
-
 .advice-view__text {
   margin: 0;
   white-space: pre-wrap;
+}
+
+.advice-view__menu {
+  margin: 8px 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.advice-view__menu-label {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* 距離・ペース・合計時間はdt/ddの縦積みにせず、横並びの統計項目として表示する。
+   dl(auto 1fr)のままだと狭い画面でラベルと値が縦に積み上がって間延びしていたため、
+   flexの横並び(折り返しあり)に変更した。 */
+.advice-view__stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.advice-view__stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 72px;
+}
+
+.advice-view__stat-label {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.advice-view__stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-h);
 }
 
 .advice-view__note,
@@ -530,23 +576,21 @@
 @media (max-width: 400px) {
   /* dt/ddを横並び(auto 1fr)にしていると、dt側のラベルが長い項目
      (例: 「直近3件の平均ペース」)で幅を取られ、dd側が極端に狭くなって
-     折り返しだらけになる。かなり狭い画面ではdt/ddを縦積みにする。 */
+     折り返しだらけになる。かなり狭い画面ではdt/ddを縦積みにする。
+     (advice-view__cardはフェーズ7-2でdlをやめ、独自の横並びstats表示に変更済み) */
   .dashboard__card dl,
-  .progress-view dl,
-  .advice-view__card dl {
+  .progress-view dl {
     grid-template-columns: 1fr;
     gap: 0 0;
   }
 
   .dashboard__card dt,
-  .progress-view dt,
-  .advice-view__card dt {
+  .progress-view dt {
     margin-top: 6px;
   }
 
   .dashboard__card dt:first-child,
-  .progress-view dt:first-child,
-  .advice-view__card dt:first-child {
+  .progress-view dt:first-child {
     margin-top: 0;
   }
 }
