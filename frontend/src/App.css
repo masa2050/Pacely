@@ -115,9 +115,7 @@
 }
 
 @media (min-width: 1024px) {
-  .dashboard,
-  .dashboard:has(.run-list),
-  .dashboard:has(.goal-list) {
+  .dashboard {
     max-width: 1000px;
     flex-direction: row;
     flex-wrap: wrap;
