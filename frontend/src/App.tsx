@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { useSession } from './hooks/useSession'
 import { AuthForm } from './components/AuthForm'
 import { Dashboard } from './components/Dashboard'
-import { Sidebar } from './components/Sidebar'
 import { Settings } from './components/Settings'
 import { ResetPasswordForm } from './components/ResetPasswordForm'
 import { PrivacyPolicy } from './components/PrivacyPolicy'
@@ -50,10 +49,7 @@ function App() {
   return (
     <div id="center">
       {session ? (
-        <div className="app-layout">
-          <Sidebar onSettingsClick={() => setShowSettings(true)} />
-          <Dashboard session={session} />
-        </div>
+        <Dashboard session={session} onSettingsClick={() => setShowSettings(true)} />
       ) : (
         <AuthForm />
       )}
