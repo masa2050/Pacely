@@ -50,7 +50,7 @@ function App() {
   if (showSettings && session) {
     return (
       <div id="center">
-        <Settings onBack={() => setShowSettings(false)} />
+        <Settings session={session} onBack={() => setShowSettings(false)} />
       </div>
     )
   }

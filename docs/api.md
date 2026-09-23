@@ -52,11 +52,12 @@
 
 ### 2.6 ユーザー設定(users)
 
-| メソッド | パス      | 概要                                                   |
-| -------- | --------- | ------------------------------------------------------ |
-| GET      | /users/me | 自分のプロフィール(regionなど)を取得                   |
-| PUT      | /users/me | regionなどのプロフィール更新(天候取得地域の設定に使用) |
-| DELETE   | /users/me | 退会。Pacely独自データ(runs/goals/advices含む)とSupabase Authアカウントを削除する(docs/adr/014) |
+| メソッド | パス               | 概要                                                                                     |
+| -------- | ------------------ | ----------------------------------------------------------------------------------------- |
+| GET      | /users/me          | 自分のプロフィール(region・usernameなど)を取得                                            |
+| PUT      | /users/me          | region・usernameの更新(どちらか一方のみの送信も可。天候取得地域・画面上の表示名の設定に使用) |
+| PUT      | /users/me/password | ログイン中ユーザーのパスワード変更(要:フロントで現在のパスワードを再認証済みであること、docs/adr/016) |
+| DELETE   | /users/me          | 退会。Pacely独自データ(runs/goals/advices含む)とSupabase Authアカウントを削除する(docs/adr/014) |
 
 ## 3. GET /advices/latest の処理フロー(重要)
 

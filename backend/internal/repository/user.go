@@ -26,8 +26,8 @@ func NewUserRepository(pool *pgxpool.Pool) *UserRepository {
 
 func (r *UserRepository) GetByID(ctx context.Context, id string) (*model.User, error) {
 	var u model.User
-	row := r.pool.QueryRow(ctx, `SELECT id, region, created_at FROM users WHERE id = $1`, id)
-	if err := row.Scan(&u.ID, &u.Region, &u.CreatedAt); err != nil {
+	row := r.pool.QueryRow(ctx, `SELECT id, region, username, created_at FROM users WHERE id = $1`, id)
+	if err := row.Scan(&u.ID, &u.Region, &u.Username, &u.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}
@@ -36,12 +36,12 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*model.User, e
 	return &u, nil
 }
 
-// Create はプロフィール行を新規作成する。region は未設定(null)で作る。
+// Create はプロフィール行を新規作成する。region・username は未設定(null)で作る。
 func (r *UserRepository) Create(ctx context.Context, id string) (*model.User, error) {
 	var u model.User
 	row := r.pool.QueryRow(ctx,
-		`INSERT INTO users (id) VALUES ($1) RETURNING id, region, created_at`, id)
-	if err := row.Scan(&u.ID, &u.Region, &u.CreatedAt); err != nil {
+		`INSERT INTO users (id) VALUES ($1) RETURNING id, region, username, created_at`, id)
+	if err := row.Scan(&u.ID, &u.Region, &u.Username, &u.CreatedAt); err != nil {
 		return nil, err
 	}
 	return &u, nil
@@ -55,11 +55,14 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *UserRepository) UpdateRegion(ctx context.Context, id string, region string) (*model.User, error) {
+// UpdateProfile はregion・usernameを更新する。どちらもポインタで、nilの場合は
+// COALESCEで既存値のまま変更しない(PUT /users/meで片方だけ送るケースに対応するため)。
+func (r *UserRepository) UpdateProfile(ctx context.Context, id string, region, username *string) (*model.User, error) {
 	var u model.User
 	row := r.pool.QueryRow(ctx,
-		`UPDATE users SET region = $1 WHERE id = $2 RETURNING id, region, created_at`, region, id)
-	if err := row.Scan(&u.ID, &u.Region, &u.CreatedAt); err != nil {
+		`UPDATE users SET region = COALESCE($1, region), username = COALESCE($2, username)
+		 WHERE id = $3 RETURNING id, region, username, created_at`, region, username, id)
+	if err := row.Scan(&u.ID, &u.Region, &u.Username, &u.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
 		}

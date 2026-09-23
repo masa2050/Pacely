@@ -142,6 +142,7 @@
 
 .auth-form label,
 .dashboard__region-form label,
+.settings__password-form label,
 .run-form label,
 .goal-form label {
   display: flex;
@@ -153,6 +154,7 @@
 
 .auth-form input,
 .dashboard__region-form input,
+.settings__password-form input,
 .run-form input,
 .goal-form input,
 .goal-form select {
@@ -257,7 +259,8 @@
   word-break: break-all;
 }
 
-.dashboard__region-form {
+.dashboard__region-form,
+.settings__password-form {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -566,7 +569,7 @@
   cursor: pointer;
 }
 
-.settings__placeholder {
+.settings__message {
   color: var(--text);
   font-size: 14px;
 }
