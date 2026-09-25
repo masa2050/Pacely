@@ -20,7 +20,10 @@ func NewAdviceHandler(service *service.AdviceService) *AdviceHandler {
 }
 
 // adviceToError はservice層のエラーをdocs/api.md 4.のステータスコードに変換する。
-// AI API・天候APIの呼び出し失敗は分類されず500に落ちる(docs/api.md 4.に明記の方針)。
+// AI API・天候APIの呼び出し失敗はservice.ErrExternalAPIとして分類され、
+// 500で定型メッセージのみを返す(docs/implementation-plan.md 8-1)。
+// *url.Errorやレスポンス本文にAPIキー・生JSONが含まれうるため、詳細はai_client.go/
+// weather_client.go側でログにのみ出力済みで、ここではerr.Error()を一切使わない。
 func adviceToError(err error) error {
 	switch {
 	case errors.Is(err, repository.ErrNotFound):
@@ -29,6 +32,10 @@ func adviceToError(err error) error {
 		return echo.NewHTTPError(http.StatusForbidden, "他ユーザーのAI提案は操作できません")
 	case errors.Is(err, service.ErrInvalidInput):
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	case errors.Is(err, service.ErrExternalAPI):
+		// 詳細(APIキー込みのURL・レスポンス本文)はai_client.go/weather_client.go側で
+		// 発生元に近い場所ですでにログ済みなので、ここでは定型メッセージのみ返す。
+		return echo.NewHTTPError(http.StatusInternalServerError, "AI提案の生成に失敗しました。しばらくしてから再度お試しください")
 	default:
 		return echo.NewHTTPError(http.StatusInternalServerError, "AI提案の取得に失敗しました: "+err.Error())
 	}
