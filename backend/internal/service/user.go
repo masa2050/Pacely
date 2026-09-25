@@ -2,7 +2,9 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -36,19 +38,73 @@ func NewUserService(repo *repository.UserRepository, supabaseURL string, supabas
 // そのため「初回の /users/me アクセス時に行が無ければ作る」という
 // get-or-create方式にして、フロント・バックエンドどちらにも
 // 追加のサインアップ処理を増やさないようにしている。
+//
+// runs/goals/advicesの作成時にも「プロフィール行の存在を保証する」目的で呼ばれるため
+// (internal/service/run.go等)、usernameを持たないシグネチャのまま残す。
+// usernameを渡したい場合はGetOrCreateMeWithUsernameを使う。
 func (s *UserService) GetOrCreateMe(ctx context.Context, userID string) (*model.User, error) {
+	return s.getOrCreate(ctx, userID, nil)
+}
+
+// GetOrCreateMeWithUsername はGetOrCreateMeと同じだが、行を新規作成する際に
+// usernameも一緒に設定する(フェーズ7-3、docs/adr/017)。
+// サインアップ時にsupabase.auth.signUpのoptions.dataへ渡したusernameは、JWTの
+// user_metadataクレーム経由でミドルウェア(appmw.ContextUsernameKey)から取得できる。
+// GET /users/meのハンドラからのみ呼ばれる想定。
+func (s *UserService) GetOrCreateMeWithUsername(ctx context.Context, userID string, username *string) (*model.User, error) {
+	return s.getOrCreate(ctx, userID, username)
+}
+
+func (s *UserService) getOrCreate(ctx context.Context, userID string, username *string) (*model.User, error) {
 	u, err := s.repo.GetByID(ctx, userID)
 	if err == nil {
 		return u, nil
 	}
 	if errors.Is(err, repository.ErrNotFound) {
-		return s.repo.Create(ctx, userID)
+		return s.repo.Create(ctx, userID, username)
 	}
 	return nil, err
 }
 
-func (s *UserService) UpdateRegion(ctx context.Context, userID string, region string) (*model.User, error) {
-	return s.repo.UpdateRegion(ctx, userID, region)
+func (s *UserService) UpdateProfile(ctx context.Context, userID string, region, username *string) (*model.User, error) {
+	return s.repo.UpdateProfile(ctx, userID, region, username)
+}
+
+// UpdatePassword はログイン中ユーザーのパスワードを変更する(フェーズ7-4、docs/adr/016)。
+// 未ログイン時のメールリンク経由の再設定(docs/adr/010)とは別のフローで、
+// こちらはSupabase Authの管理者APIをバックエンド経由で呼び出す。
+// 「現在のパスワードが正しいか」の確認はフロントエンドがsignInWithPasswordで
+// 再認証してから呼び出す前提とし、ここでは新しいパスワードの設定のみを行う
+// (DeleteAccountと同じ管理者API呼び出しパターン)。
+func (s *UserService) UpdatePassword(ctx context.Context, userID string, newPassword string) error {
+	// %qはGo文字列のエスケープ規則でありJSONのエスケープ規則とは異なるため、
+	// 制御文字を含むパスワードで不正なJSONになるのを避けるためjson.Marshalを使う。
+	payload, err := json.Marshal(struct {
+		Password string `json:"password"`
+	}{Password: newPassword})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
+		s.supabaseURL+"/auth/v1/admin/users/"+userID, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("apikey", s.supabaseAdminKey)
+	req.Header.Set("Authorization", "Bearer "+s.supabaseAdminKey)
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := s.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("パスワードの更新に失敗: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("パスワードの更新に失敗(status %d): %s", resp.StatusCode, string(body))
+	}
+	return nil
 }
 
 // DeleteAccount は退会処理(docs/adr/014)。

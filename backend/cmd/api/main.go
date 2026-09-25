@@ -120,6 +120,7 @@ func main() {
 	api.Use(appmw.JWTAuth(jwks.Keyfunc))
 	api.GET("/users/me", userHandler.GetMe)
 	api.PUT("/users/me", userHandler.UpdateMe)
+	api.PUT("/users/me/password", userHandler.ChangePassword)
 	api.DELETE("/users/me", userHandler.DeleteMe)
 
 	api.POST("/runs", runHandler.Create)

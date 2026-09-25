@@ -10,6 +10,7 @@ export function AuthForm() {
   const [mode, setMode] = useState<Mode>('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [username, setUsername] = useState('')
   const [message, setMessage] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
@@ -35,10 +36,16 @@ export function AuthForm() {
       return
     }
 
+    // usernameはPacely独自のusersテーブルのカラムで、Supabase Authそのものは知らない値だが、
+    // options.dataに渡すとuser_metadataとしてJWTに含まれるようになる。バックエンドの
+    // GET /users/me(初回アクセス時)がそこから読み取ってusersテーブルの行作成時に使う
+    // (docs/adr/017)。"Confirm email" が有効な本番環境でも、確認前のsignUp時点で
+    // Supabase Auth側に保存されるため、確認メールのリンクを踏んで実際にログインするまで
+    // 時間が空いても値は失われない。
     const { error } =
       mode === 'login'
         ? await supabase.auth.signInWithPassword({ email, password })
-        : await supabase.auth.signUp({ email, password })
+        : await supabase.auth.signUp({ email, password, options: { data: { username } } })
 
     setSubmitting(false)
 
@@ -80,6 +87,19 @@ export function AuthForm() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+          />
+        </label>
+      )}
+
+      {mode === 'signup' && (
+        <label>
+          ユーザーネーム(画面上の表示名)
+          <input
+            required
+            maxLength={50}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            autoComplete="username"
           />
         </label>
       )}

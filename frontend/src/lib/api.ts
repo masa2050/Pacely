@@ -7,6 +7,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080
 export type Me = {
   id: string
   region: string | null
+  username: string | null
   created_at: string
 }
 
@@ -55,16 +56,28 @@ export function getMe(): Promise<Me> {
   return authorizedFetch<Me>('/users/me')
 }
 
-export function updateMyRegion(region: string): Promise<Me> {
+// region・usernameはどちらか一方のみの更新にも対応する(バックエンド側でPUTボディに
+// 含まれなかったフィールドは変更しない、docs/api.md 2.6)。
+export function updateMyProfile(input: { region?: string; username?: string }): Promise<Me> {
   return authorizedFetch<Me>('/users/me', {
     method: 'PUT',
-    body: JSON.stringify({ region }),
+    body: JSON.stringify(input),
   })
 }
 
 // 退会。Pacely独自データとSupabase Authアカウントを両方削除する(docs/adr/014)。
 export function deleteAccount(): Promise<void> {
   return authorizedFetch<void>('/users/me', { method: 'DELETE' })
+}
+
+// ログイン中ユーザーのパスワード変更(フェーズ7-4)。呼び出し前に呼び出し側で
+// supabase.auth.signInWithPasswordによる現在のパスワードの再認証を済ませておく前提
+// (docs/adr/016)。
+export function changePassword(newPassword: string): Promise<void> {
+  return authorizedFetch<void>('/users/me/password', {
+    method: 'PUT',
+    body: JSON.stringify({ new_password: newPassword }),
+  })
 }
 
 export type Run = {
@@ -83,6 +96,18 @@ export type RunInput = {
   duration_sec: number
   run_date: string
   rpe: number | null
+}
+
+// バックエンドの並び順(run.go ListByUser: run_date DESC, created_at DESC)と合わせる。
+// 作成・編集の直後、レスポンスの1件をローカルのrunsに反映する際は一覧を取り直さず
+// 配列を直接更新しているため、そのときにも同じ並び順になるよう呼び出し側で使う。
+export function sortRuns(runs: Run[]): Run[] {
+  return [...runs].sort((a, b) => {
+    if (a.run_date !== b.run_date) {
+      return a.run_date > b.run_date ? -1 : 1
+    }
+    return a.created_at > b.created_at ? -1 : 1
+  })
 }
 
 export function listRuns(): Promise<Run[]> {

@@ -1,43 +1,99 @@
 import { useEffect, useState } from 'react'
-import { getMe, updateMyRegion, deleteAccount, type Me } from '../lib/api'
+import type { FormEvent } from 'react'
+import type { Session } from '@supabase/supabase-js'
+import { getMe, updateMyProfile, changePassword, deleteAccount, type Me } from '../lib/api'
 import { supabase } from '../lib/supabase'
+import { PREFECTURES } from '../lib/prefectures'
 
 type Props = {
+  session: Session
   onBack: () => void
 }
 
-// フェーズ7-2: 設定画面。
-// プロフィール編集(地域)と退会をここにまとめる。ユーザーネームの編集は
-// usersテーブルにusernameカラムが無くまだ実装できないため、7-3で対応する。
+// フェーズ7-2: 設定画面。プロフィール編集(地域・ユーザーネーム)と退会をここにまとめる。
+// フェーズ7-3でusernameカラムが追加されたため、region専用だった保存フォームを
+// region・username共通のプロフィールフォームに拡張した。
 // 退会は元々Dashboardの一番下にあり目立たない位置だったため、専用画面に移動した
 // (docs/implementation-plan.md 7-2)。移動に伴いDashboard.tsxのプロフィールカードは
 // 表示専用にし、編集操作はこの画面に一本化した(同じ編集フォームを2箇所に持たないため)。
-export function Settings({ onBack }: Props) {
+export function Settings({ session, onBack }: Props) {
   const [me, setMe] = useState<Me | null>(null)
   const [region, setRegion] = useState('')
+  const [username, setUsername] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [deleting, setDeleting] = useState(false)
+
+  const [currentPassword, setCurrentPassword] = useState('')
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmNewPassword, setConfirmNewPassword] = useState('')
+  const [passwordError, setPasswordError] = useState<string | null>(null)
+  const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
+  const [changingPassword, setChangingPassword] = useState(false)
 
   useEffect(() => {
     getMe()
       .then((data) => {
         setMe(data)
         setRegion(data.region ?? '')
+        setUsername(data.username ?? '')
       })
       .catch((err) => setError(err.message))
   }, [])
 
-  async function handleSaveRegion() {
+  // regionは空文字(「(未設定)」選択時)も含めて常にそのまま送る。バックエンド側は
+  // 空文字を「未設定に戻す」指示として扱うため、これで地域のクリアも保存できる
+  // (docs/api.md 2.6)。
+  async function handleSaveProfile() {
     setSaving(true)
     setError(null)
     try {
-      const updated = await updateMyRegion(region)
+      const updated = await updateMyProfile({ region, username })
       setMe(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     } finally {
       setSaving(false)
+    }
+  }
+
+  // パスワード変更(フェーズ7-4)。バックエンドの/users/me/passwordは「現在のパスワードが
+  // 正しいこと」自体は検証しないため、先にsignInWithPasswordで再認証してから呼び出す
+  // (docs/adr/016)。再認証に失敗した場合はバックエンドを呼ばない。
+  async function handleChangePassword(e: FormEvent) {
+    e.preventDefault()
+    setPasswordError(null)
+    setPasswordMessage(null)
+
+    if (!session.user.email) {
+      setPasswordError('メールアドレスが取得できませんでした')
+      return
+    }
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError('新しいパスワードが一致しません')
+      return
+    }
+
+    setChangingPassword(true)
+    try {
+      const { error: reauthError } = await supabase.auth.signInWithPassword({
+        email: session.user.email,
+        password: currentPassword,
+      })
+      if (reauthError) {
+        setPasswordError('現在のパスワードが正しくありません')
+        return
+      }
+
+      await changePassword(newPassword)
+      setPasswordMessage('パスワードを変更しました')
+      setCurrentPassword('')
+      setNewPassword('')
+      setConfirmNewPassword('')
+    } catch (err) {
+      setPasswordError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setChangingPassword(false)
     }
   }
 
@@ -76,20 +132,35 @@ export function Settings({ onBack }: Props) {
             <dl>
               <dt>user id</dt>
               <dd>{me.id}</dd>
-              <dt>region</dt>
-              <dd>{me.region ?? '(未設定)'}</dd>
             </dl>
 
             <div className="dashboard__region-form">
               <label>
-                地域(天候取得用)
+                ユーザーネーム(表示名)
                 <input
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value)}
-                  placeholder="例: Tokyo"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  placeholder="例: taro"
+                  maxLength={50}
                 />
               </label>
-              <button type="button" onClick={handleSaveRegion} disabled={saving}>
+              <label>
+                地域(天候取得用)
+                <select value={region} onChange={(e) => setRegion(e.target.value)}>
+                  <option value="">(未設定)</option>
+                  {/* フェーズ7-3以前に自由入力で保存された値(例: "Tokyo")は選択肢に無いため、
+                      そのままでは「未設定」に見えてしまう。現在の保存値を選択肢として足しておく。 */}
+                  {region && !PREFECTURES.includes(region as (typeof PREFECTURES)[number]) && (
+                    <option value={region}>{region}(以前の設定)</option>
+                  )}
+                  {PREFECTURES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" onClick={handleSaveProfile} disabled={saving}>
                 {saving ? '保存中...' : '保存(PUT /users/me)'}
               </button>
             </div>
@@ -101,7 +172,47 @@ export function Settings({ onBack }: Props) {
 
       <div className="dashboard__card">
         <h2>パスワード変更</h2>
-        <p className="settings__placeholder">近日対応予定です。</p>
+        <form className="settings__password-form" onSubmit={handleChangePassword}>
+          <label>
+            現在のパスワード
+            <input
+              type="password"
+              required
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </label>
+          <label>
+            新しいパスワード
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </label>
+          <label>
+            新しいパスワード(確認)
+            <input
+              type="password"
+              required
+              minLength={6}
+              value={confirmNewPassword}
+              onChange={(e) => setConfirmNewPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </label>
+
+          {passwordError && <p className="dashboard__error">{passwordError}</p>}
+          {passwordMessage && <p className="settings__message">{passwordMessage}</p>}
+
+          <button type="submit" disabled={changingPassword}>
+            {changingPassword ? '変更中...' : 'パスワードを変更する'}
+          </button>
+        </form>
       </div>
 
       <div className="dashboard__card dashboard__card--danger">

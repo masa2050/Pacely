@@ -13,6 +13,11 @@ import (
 // ハンドラ側では c.Get(ContextUserIDKey) で取り出す。
 const ContextUserIDKey = "user_id"
 
+// コンテキストに user_metadata.username を格納するときのキー(フェーズ7-3、docs/adr/017)。
+// サインアップ時にsupabase.auth.signUpのoptions.dataへ渡したusernameは、Supabase Authが
+// JWTのuser_metadataクレームに載せて返す。値が無い場合は空文字になる。
+const ContextUsernameKey = "username"
+
 // JWTAuth は Supabase Auth が発行した JWT を検証するミドルウェアを返す。
 //
 // keyfn には JWKS(公開鍵)から署名検証用の鍵を返す関数を渡す(main で組み立てる)。
@@ -59,6 +64,15 @@ func JWTAuth(keyfn jwt.Keyfunc) echo.MiddlewareFunc {
 			}
 
 			c.Set(ContextUserIDKey, sub)
+
+			// user_metadataはSupabase Auth側の付加情報で、存在しない場合や
+			// 型が違う場合もあるためベストエフォートで取り出す(無ければ空文字のまま)。
+			var username string
+			if meta, ok := claims["user_metadata"].(map[string]interface{}); ok {
+				username, _ = meta["username"].(string)
+			}
+			c.Set(ContextUsernameKey, username)
+
 			return next(c)
 		}
 	}
