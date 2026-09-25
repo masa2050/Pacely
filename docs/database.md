@@ -24,7 +24,7 @@ Supabase Authが管理するユーザーテーブルをベースに利用する(
 | カラム名   | 型          | 説明                                   |
 | ---------- | ----------- | --------------------------------------- |
 | id         | uuid (PK)   | Supabase Authのuser idと同一            |
-| region     | varchar     | 天候取得用の地域(都道府県/市)          |
+| region     | varchar     | 天候取得用の地域。47都道府県名を保存する(例: `東京都`)。OpenWeatherMapへ渡す検索キーワードへの変換はBEのservice層で行う(docs/adr/018)。7-3以前に自由入力で保存されたローマ字表記(例: `Tokyo`)も残っており、その場合はそのまま天候APIへ渡す |
 | username   | varchar(50) | 画面上の表示名(未設定可、フェーズ7-3) |
 | created_at | timestamp   | 作成日時                                |
 

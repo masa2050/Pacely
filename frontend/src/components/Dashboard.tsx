@@ -75,7 +75,6 @@ export function Dashboard({ session, onSettingsClick }: Props) {
             ? `、${session.user.email.split('@')[0]}さん`
             : ''}
       </p>
-      <p className="dashboard__email">{session.user.email}</p>
 
       {error && <p className="dashboard__error">{error}</p>}
 

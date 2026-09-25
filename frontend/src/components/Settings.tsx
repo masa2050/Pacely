@@ -3,6 +3,7 @@ import type { FormEvent } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { getMe, updateMyProfile, changePassword, deleteAccount, type Me } from '../lib/api'
 import { supabase } from '../lib/supabase'
+import { PREFECTURES } from '../lib/prefectures'
 
 type Props = {
   session: Session
@@ -40,11 +41,22 @@ export function Settings({ session, onBack }: Props) {
       .catch((err) => setError(err.message))
   }, [])
 
+  // 未入力のフィールドはリクエストに含めない。バックエンドは空文字を400で弾くため
+  // (「片方だけ更新」をボディにフィールドが有るかどうかで判定している、docs/adr/017)、
+  // 例えば地域未設定のユーザーがユーザーネームだけ保存するケースで失敗しないようにする。
   async function handleSaveProfile() {
+    const input: { region?: string; username?: string } = {}
+    if (region) input.region = region
+    if (username) input.username = username
+    if (!input.region && !input.username) {
+      setError('ユーザーネームか地域のいずれかを入力してください')
+      return
+    }
+
     setSaving(true)
     setError(null)
     try {
-      const updated = await updateMyProfile({ region, username })
+      const updated = await updateMyProfile(input)
       setMe(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
@@ -142,11 +154,19 @@ export function Settings({ session, onBack }: Props) {
               </label>
               <label>
                 地域(天候取得用)
-                <input
-                  value={region}
-                  onChange={(e) => setRegion(e.target.value)}
-                  placeholder="例: Tokyo"
-                />
+                <select value={region} onChange={(e) => setRegion(e.target.value)}>
+                  <option value="">(未設定)</option>
+                  {/* フェーズ7-3以前に自由入力で保存された値(例: "Tokyo")は選択肢に無いため、
+                      そのままでは「未設定」に見えてしまう。現在の保存値を選択肢として足しておく。 */}
+                  {region && !PREFECTURES.includes(region as (typeof PREFECTURES)[number]) && (
+                    <option value={region}>{region}(以前の設定)</option>
+                  )}
+                  {PREFECTURES.map((p) => (
+                    <option key={p} value={p}>
+                      {p}
+                    </option>
+                  ))}
+                </select>
               </label>
               <button type="button" onClick={handleSaveProfile} disabled={saving}>
                 {saving ? '保存中...' : '保存(PUT /users/me)'}
