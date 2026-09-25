@@ -19,11 +19,16 @@ export function RunList({ runs, onChanged }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  async function handleDelete(id: string) {
+  // 退会(Settings.tsx)と同じくwindow.confirmによる簡易確認。取り消せない削除の
+  // 前に誤タップを防ぐのが目的で、専用の確認モーダルを作るほどの複雑さは不要と判断した。
+  async function handleDelete(run: Run) {
+    if (!window.confirm(`${run.run_date}の記録(${run.distance_km}km)を削除します。元に戻せません。よろしいですか?`)) {
+      return
+    }
     setError(null)
     try {
-      await deleteRun(id)
-      onChanged(runs.filter((r) => r.id !== id))
+      await deleteRun(run.id)
+      onChanged(runs.filter((r) => r.id !== run.id))
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
     }
@@ -37,6 +42,16 @@ export function RunList({ runs, onChanged }: Props) {
     <div className="run-list">
       {error && <p className="run-list__error">{error}</p>}
       <table>
+        {/* table-layout:fixed(App.css)で列幅を固定するため、割合はcolgroupで指定する。
+            これによりRPE・編集/削除ボタンまで含めてカード幅に収まり、横スクロールが
+            不要になる(縦スクロールはrun-list自体に残したまま)。 */}
+        <colgroup>
+          <col className="run-list__col-date" />
+          <col className="run-list__col-distance" />
+          <col className="run-list__col-pace" />
+          <col className="run-list__col-rpe" />
+          <col className="run-list__col-actions" />
+        </colgroup>
         <thead>
           <tr>
             <th>日付</th>
@@ -67,12 +82,27 @@ export function RunList({ runs, onChanged }: Props) {
                 <td>{run.distance_km}km</td>
                 <td>{formatPace(run.pace_sec_per_km)}</td>
                 <td>{run.rpe ?? '-'}</td>
-                <td>
-                  <button type="button" onClick={() => setEditingId(run.id)}>
-                    編集
+                <td className="run-list__actions">
+                  {/* 「編集」「削除」のテキストボタンは横幅を取り、狭いカード幅
+                      (PC3カラム表示時など)でテーブルが横スクロール必須になって
+                      いたため、アイコンボタンに変更して省スペース化した。 */}
+                  <button
+                    type="button"
+                    className="run-list__icon-button"
+                    onClick={() => setEditingId(run.id)}
+                    aria-label="編集"
+                    title="編集"
+                  >
+                    ✎
                   </button>
-                  <button type="button" onClick={() => handleDelete(run.id)}>
-                    削除
+                  <button
+                    type="button"
+                    className="run-list__icon-button"
+                    onClick={() => handleDelete(run)}
+                    aria-label="削除"
+                    title="削除"
+                  >
+                    🗑
                   </button>
                 </td>
               </tr>

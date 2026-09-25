@@ -16,6 +16,12 @@ type Advice struct {
 	NextMenu       NextMenu       `json:"next_menu"`
 	WeatherContext WeatherContext `json:"weather_context"`
 	GeneratedAt    time.Time      `json:"generated_at"`
+
+	// フィードバック(フェーズ7-5、docs/adr/019)。
+	// 3つともnil = 未評価。1:1の関係なので別テーブルにせずadvicesのカラムとして持つ。
+	IsHelpful       *bool      `json:"is_helpful"`
+	FeedbackComment *string    `json:"feedback_comment"`
+	FeedbackAt      *time.Time `json:"feedback_at"`
 }
 
 // NextMenu は次回練習メニュー(docs/database.md 3.4 next_menu)。

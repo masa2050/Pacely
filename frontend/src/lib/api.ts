@@ -232,6 +232,10 @@ export type Advice = {
   next_menu: NextMenu
   weather_context: WeatherContext
   generated_at: string
+  // フィードバック(フェーズ7-5、docs/adr/019)。3つともnull = 未評価。
+  is_helpful: boolean | null
+  feedback_comment: string | null
+  feedback_at: string | null
 }
 
 // GET /advices/latest はAI呼び出しをスキップした場合(記録不足・目標未設定)も
@@ -253,4 +257,17 @@ export function getLatestAdvice(): Promise<LatestAdviceResult> {
 
 export function listAdvices(): Promise<Advice[]> {
   return authorizedFetch<Advice[]>('/advices')
+}
+
+// PUT /advices/{id}/feedback。上書き可能(冪等)で、更新後のadviceが返る。
+// 評価の取り消しはスコープ外なので、送信できるのは true / false のみ(docs/adr/019)。
+export function submitAdviceFeedback(
+  adviceID: string,
+  isHelpful: boolean,
+  comment?: string,
+): Promise<Advice> {
+  return authorizedFetch<Advice>(`/advices/${adviceID}/feedback`, {
+    method: 'PUT',
+    body: JSON.stringify({ is_helpful: isHelpful, comment: comment ?? null }),
+  })
 }
