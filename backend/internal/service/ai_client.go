@@ -4,14 +4,22 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
 
 	"github.com/masa2050/pacely/backend/internal/model"
 )
+
+// ErrExternalAPI はAI API・天候APIなど外部API呼び出しが失敗したことを表すsentinel error。
+// docs/implementation-plan.md 8-1: これらのエラーの生メッセージ(*url.Errorが含む
+// クエリ文字列込みのURL、レスポンス本文)にはAPIキーが含まれうるため、handler層で
+// このエラーだと判定した場合は定型メッセージのみを返す。詳細はlog.Printfでサーバー側にのみ残す。
+var ErrExternalAPI = errors.New("external api failed")
 
 // AdvicePromptInput はAIへのプロンプトに必要な材料をまとめたもの。
 // プロバイダ(Gemini/Claude等)に依存しない形にしておくことで、
@@ -160,35 +168,46 @@ func (c *GeminiClient) GenerateAdvice(ctx context.Context, in AdvicePromptInput)
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, geminiEndpoint+"?key="+c.apiKey, bytes.NewReader(b))
 	if err != nil {
-		return AdviceGeneration{}, err
+		// errはAPIキー込みのURLを含みうるためログのみ。
+		log.Printf("advice: gemini api request build failed: %v", err)
+		return AdviceGeneration{}, fmt.Errorf("%w: AIリクエストの作成に失敗しました", ErrExternalAPI)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		return AdviceGeneration{}, fmt.Errorf("AI API呼び出しに失敗: %w", err)
+		// errは*url.Errorで、クエリ文字列(?key=<APIキー>)込みのリクエストURLを含むため
+		// ログにのみ残し、呼び出し元にはErrExternalAPIの定型メッセージだけを返す。
+		log.Printf("advice: gemini api call failed: %v", err)
+		return AdviceGeneration{}, fmt.Errorf("%w: AI API呼び出しに失敗しました", ErrExternalAPI)
 	}
 	defer resp.Body.Close()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return AdviceGeneration{}, err
+		log.Printf("advice: gemini api response read failed: %v", err)
+		return AdviceGeneration{}, fmt.Errorf("%w: AI APIのレスポンス取得に失敗しました", ErrExternalAPI)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return AdviceGeneration{}, fmt.Errorf("AI APIがエラーを返しました(status %d): %s", resp.StatusCode, string(respBody))
+		// respBodyはGoogle側の生JSON(429時のエラー詳細等)なのでログのみ。
+		log.Printf("advice: gemini api returned status %d: %s", resp.StatusCode, string(respBody))
+		return AdviceGeneration{}, fmt.Errorf("%w: AI APIがエラーを返しました(status %d)", ErrExternalAPI, resp.StatusCode)
 	}
 
 	var gr geminiResponse
 	if err := json.Unmarshal(respBody, &gr); err != nil {
-		return AdviceGeneration{}, fmt.Errorf("AI APIのレスポンス解析に失敗: %w", err)
+		log.Printf("advice: gemini api response parse failed: %v", err)
+		return AdviceGeneration{}, fmt.Errorf("%w: AI APIのレスポンス解析に失敗しました", ErrExternalAPI)
 	}
 	if len(gr.Candidates) == 0 || len(gr.Candidates[0].Content.Parts) == 0 {
-		return AdviceGeneration{}, fmt.Errorf("AI APIのレスポンスに候補がありません")
+		log.Printf("advice: gemini api response has no candidates: %s", string(respBody))
+		return AdviceGeneration{}, fmt.Errorf("%w: AI APIのレスポンスに候補がありません", ErrExternalAPI)
 	}
 
 	var parsed adviceJSON
 	if err := json.Unmarshal([]byte(gr.Candidates[0].Content.Parts[0].Text), &parsed); err != nil {
-		return AdviceGeneration{}, fmt.Errorf("AI出力のJSON解析に失敗: %w", err)
+		log.Printf("advice: gemini output json parse failed: %v (raw: %s)", err, gr.Candidates[0].Content.Parts[0].Text)
+		return AdviceGeneration{}, fmt.Errorf("%w: AI出力のJSON解析に失敗しました", ErrExternalAPI)
 	}
 
 	return AdviceGeneration{

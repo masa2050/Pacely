@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"time"
@@ -125,26 +126,32 @@ func (c *OpenWeatherMapClient) CurrentWeather(ctx context.Context, region string
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, openWeatherMapBaseURL+"?"+q.Encode(), nil)
 	if err != nil {
-		return model.WeatherContext{}, err
+		// errはAPIキー込みのURL(?appid=<APIキー>)を含みうるためログのみ。
+		log.Printf("advice: weather api request build failed: %v", err)
+		return model.WeatherContext{}, fmt.Errorf("%w: 天候リクエストの作成に失敗しました", ErrExternalAPI)
 	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return model.WeatherContext{}, fmt.Errorf("天候API呼び出しに失敗: %w", err)
+		log.Printf("advice: weather api call failed: %v", err)
+		return model.WeatherContext{}, fmt.Errorf("%w: 天候API呼び出しに失敗しました", ErrExternalAPI)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return model.WeatherContext{}, err
+		log.Printf("advice: weather api response read failed: %v", err)
+		return model.WeatherContext{}, fmt.Errorf("%w: 天候APIのレスポンス取得に失敗しました", ErrExternalAPI)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return model.WeatherContext{}, fmt.Errorf("天候APIがエラーを返しました(status %d): %s", resp.StatusCode, string(body))
+		log.Printf("advice: weather api returned status %d: %s", resp.StatusCode, string(body))
+		return model.WeatherContext{}, fmt.Errorf("%w: 天候APIがエラーを返しました(status %d)", ErrExternalAPI, resp.StatusCode)
 	}
 
 	var parsed openWeatherMapResponse
 	if err := json.Unmarshal(body, &parsed); err != nil {
-		return model.WeatherContext{}, fmt.Errorf("天候APIのレスポンス解析に失敗: %w", err)
+		log.Printf("advice: weather api response parse failed: %v", err)
+		return model.WeatherContext{}, fmt.Errorf("%w: 天候APIのレスポンス解析に失敗しました", ErrExternalAPI)
 	}
 
 	description := ""
