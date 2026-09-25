@@ -115,8 +115,16 @@
 }
 
 @media (min-width: 1024px) {
-  .dashboard {
-    max-width: 1000px;
+  /* .dashboard:has(.run-list), .dashboard:has(.goal-list)(768px〜向けの720px制限、
+     このファイル冒頭)は.dashboard単体よりCSS詳細度が高く、ダッシュボードは常に
+     RunList・GoalListの両方を含むため、ここで.dashboardだけを上書きしても
+     実際には720pxのまま変わらないというバグがあった。3カラム化時にそれぞれの
+     セレクタも明示的に上書きする。1000pxではカードに対して左右の余白が広すぎたため
+     1100pxに広げた。 */
+  .dashboard,
+  .dashboard:has(.run-list),
+  .dashboard:has(.goal-list) {
+    max-width: 1100px;
     flex-direction: row;
     flex-wrap: wrap;
     align-items: flex-start;
@@ -296,18 +304,17 @@
   font-size: 14px;
 }
 
-.run-list,
 .goal-list {
-  /* 狭い画面では列数(記録は5列)がカード幅に収まらず、tableは
-     width:100%を指定していてもmin-content分は縮まずページ全体が横に
-     はみ出して崩れる。テーブルだけを横スクロール可能にして、
-     カード自体・ページ全体のレイアウトは崩さないようにする。 */
+  /* 狭い画面では列数がカード幅に収まらず、tableはwidth:100%を指定していても
+     min-content分は縮まずページ全体が横にはみ出して崩れる。テーブルだけを
+     横スクロール可能にして、カード自体・ページ全体のレイアウトは崩さないようにする。 */
   overflow-x: auto;
 }
 
 .run-list {
   /* 記録が積み上がるとテーブルの縦の長さに際限が無くなり、ページ全体が
-     どんどん下に伸びてしまうため、一定の高さで縦方向にもスクロールさせる。 */
+     どんどん下に伸びてしまうため、一定の高さで縦方向にもスクロールさせる。
+     縦スクロールは残しつつ、横スクロールは発生させない(下記table-layout参照)。 */
   max-height: 360px;
   overflow-y: auto;
 }
@@ -319,6 +326,69 @@
   font-size: 14px;
 }
 
+/* RPE・編集/削除まで横スクロール無しでカード幅に収めるため、table-layout:fixedで
+   列幅をカード幅に対する割合で固定する(内容量に応じて広がるautoをやめる)。
+   PC3カラム表示のようにカード自体が狭い場合でも、はみ出しではなく
+   セル内でのテキスト省略(ellipsis)に倒す。 */
+.run-list table {
+  table-layout: fixed;
+}
+
+.run-list__col-date {
+  width: 30%;
+}
+
+.run-list__col-distance,
+.run-list__col-pace {
+  width: 21%;
+}
+
+.run-list__col-rpe {
+  width: 11%;
+}
+
+.run-list__col-actions {
+  width: 64px;
+}
+
+.run-list td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* RPE列(4列目)は「-」または1〜2桁の短い値のみで、左寄せのままだと
+   ペース列との間隔が詰まって見える一方、列自体の右側(編集/削除列との間)に
+   余白が偏って見えて左右のバランスが悪かった。列内で中央寄せにすることで
+   両隣との間隔を均等に近づける。 */
+.run-list th:nth-child(4),
+.run-list td:nth-child(4) {
+  text-align: center;
+}
+
+/* アクションセルはボタン2つを並べるだけなので、テキスト用のellipsis指定を
+   打ち消してflexで詰める。 */
+.run-list__actions {
+  display: flex;
+  gap: 4px;
+  overflow: visible;
+}
+
+/* 「.run-list button」(共通の編集/削除ボタンスタイル)より詳細度を上げて、
+   padding/margin-rightを確実に上書きする。 */
+.run-list button.run-list__icon-button {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  flex: none;
+  font-size: 14px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-right: 0;
+}
+
 .run-list thead th {
   position: sticky;
   top: 0;
@@ -326,10 +396,9 @@
 }
 
 @media (max-width: 480px) {
-  .run-list table,
   .goal-list table {
-    /* 480px以下では5列(記録)がどうしても窮屈になるため、テーブル自体は
-       内容に必要な最小幅を確保し、上のoverflow-x: autoでスクロールさせる */
+    /* 480px以下では4列(目標)がどうしても窮屈になるため、テーブル自体は
+       内容に必要な最小幅を確保し、goal-listのoverflow-x: autoでスクロールさせる */
     min-width: 420px;
   }
 }
@@ -341,6 +410,14 @@
   text-align: left;
   padding: 6px 8px;
   border-bottom: 1px solid var(--border);
+}
+
+/* PC3カラム表示のようにカード幅が狭い場合、日付(10文字)が上のpadding(6px 8px)
+   では省略記号で切れてしまうため、run-listだけ左右の余白を詰めて文字が
+   収まる幅を確保する(直後に書くことで上のルールより優先させる)。 */
+.run-list th,
+.run-list td {
+  padding: 6px 4px;
 }
 
 .run-list button,
@@ -472,6 +549,85 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* フェーズ7-5: アドバイスへのフィードバック(docs/adr/019)。
+   カード本文と視覚的に区切るため、上に細い境界線を入れて1段落下げる。 */
+.advice-feedback {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.advice-feedback__label {
+  margin: 0;
+  font-size: 13px;
+}
+
+.advice-feedback__buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* グッドマーク・バッドマークは絵文字1文字だけの円形ボタンにする。
+   テキストボタンだと文字量の差で横並びのバランスが悪く分かりにくかったため、
+   意味が直感的に伝わるアイコンボタンに変更した。
+   「.dashboard button」(全ボタン共通の塗りつぶし紫背景)より詳細度を上げて
+   ニュートラルな見た目に上書きしないと、未選択でも塗りつぶし紫のままになり
+   「押した状態」に見えてしまうため、.dashboardを含めた2クラス構成にしている。 */
+.dashboard .advice-feedback__button {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  font-size: 18px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid var(--border);
+}
+
+/* 選択中の評価を色で示す。良い/悪いの意味が伝わるよう、共通のアクセント色ではなく
+   グッド=緑・バッド=赤(既存のdashboard__card--dangerと同系色)に分ける。 */
+.dashboard .advice-feedback__button--good.advice-feedback__button--selected {
+  background: rgba(48, 164, 108, 0.15);
+  border-color: #30a46c;
+}
+
+.dashboard .advice-feedback__button--bad.advice-feedback__button--selected {
+  background: rgba(229, 72, 77, 0.12);
+  border-color: #e5484d;
+}
+
+.advice-feedback__comment-label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--text);
+}
+
+.advice-feedback__comment {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text-h);
+  resize: vertical;
+}
+
+.advice-feedback__saved {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
 }
 
 .advice-view__history {

@@ -71,6 +71,13 @@ h2 {
 
 h1 {
   font-size: 56px;
+  /* :rootのfont省略記法(18px/145%)は%指定のline-heightを固定px値(約26px)として
+     子要素に継承する仕様があり、h1自身がline-heightを指定しないとその26pxが
+     そのまま使われてしまう。「Pacely」等の短い1行見出しでは行間が詰まっていても
+     目立たなかったが、プライバシーポリシー画面のように長い見出しが2行に折り返すと
+     26px間隔では行同士が重なって表示される。h2と同様に自身のfont-sizeを基準にした
+     line-heightを明示し、折り返しても重ならないようにする。 */
+  line-height: 118%;
   letter-spacing: -1.68px;
   margin: 32px 0;
   @media (max-width: 1024px) {
