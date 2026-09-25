@@ -138,6 +138,7 @@ func main() {
 
 	api.GET("/advices/latest", adviceHandler.GetLatest)
 	api.GET("/advices", adviceHandler.List)
+	api.PUT("/advices/:id/feedback", adviceHandler.SubmitFeedback)
 
 	log.Printf("サーバ起動: http://localhost:%s", cfg.Port)
 	if err := e.Start(":" + cfg.Port); err != nil && err != http.ErrServerClosed {

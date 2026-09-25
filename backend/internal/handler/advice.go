@@ -1,11 +1,13 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
 
 	appmw "github.com/masa2050/pacely/backend/internal/middleware"
+	"github.com/masa2050/pacely/backend/internal/repository"
 	"github.com/masa2050/pacely/backend/internal/service"
 )
 
@@ -18,9 +20,18 @@ func NewAdviceHandler(service *service.AdviceService) *AdviceHandler {
 }
 
 // adviceToError はservice層のエラーをdocs/api.md 4.のステータスコードに変換する。
-// AI API・天候APIの呼び出し失敗もここでは一律500として扱う(docs/api.md 4.に明記の方針)。
+// AI API・天候APIの呼び出し失敗は分類されず500に落ちる(docs/api.md 4.に明記の方針)。
 func adviceToError(err error) error {
-	return echo.NewHTTPError(http.StatusInternalServerError, "AI提案の取得に失敗しました: "+err.Error())
+	switch {
+	case errors.Is(err, repository.ErrNotFound):
+		return echo.NewHTTPError(http.StatusNotFound, "AI提案が見つかりません")
+	case errors.Is(err, service.ErrForbidden):
+		return echo.NewHTTPError(http.StatusForbidden, "他ユーザーのAI提案は操作できません")
+	case errors.Is(err, service.ErrInvalidInput):
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	default:
+		return echo.NewHTTPError(http.StatusInternalServerError, "AI提案の取得に失敗しました: "+err.Error())
+	}
 }
 
 // GetLatest は GET /advices/latest。
@@ -46,4 +57,31 @@ func (h *AdviceHandler) List(c echo.Context) error {
 		return adviceToError(err)
 	}
 	return c.JSON(http.StatusOK, advices)
+}
+
+// feedbackRequest は PUT /advices/{id}/feedback のリクエストボディ。
+// is_helpful: true=役に立った / false=役に立たなかった。未送信はservice層で400にする。
+type feedbackRequest struct {
+	IsHelpful *bool   `json:"is_helpful"`
+	Comment   *string `json:"comment"`
+}
+
+// SubmitFeedback は PUT /advices/{id}/feedback(フェーズ7-5、docs/adr/019)。
+// 評価の上書きを許す冪等な操作なのでPUTにしている。
+func (h *AdviceHandler) SubmitFeedback(c echo.Context) error {
+	userID, _ := c.Get(appmw.ContextUserIDKey).(string)
+
+	var req feedbackRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "リクエストボディが不正です")
+	}
+
+	advice, err := h.service.SubmitFeedback(c.Request().Context(), userID, c.Param("id"), service.FeedbackInput{
+		IsHelpful: req.IsHelpful,
+		Comment:   req.Comment,
+	})
+	if err != nil {
+		return adviceToError(err)
+	}
+	return c.JSON(http.StatusOK, advice)
 }

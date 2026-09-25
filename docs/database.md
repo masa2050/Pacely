@@ -67,9 +67,13 @@ Supabase Authが管理するユーザーテーブルをベースに利用する(
 | next_menu       | jsonb                          | 次回練習メニュー(構造化データ。例: `{"distance_km": 10, "pace_sec_per_km": 330, "note": "..."}`) |
 | weather_context | jsonb                          | 生成時に参照した天候情報(後から「なぜこの提案になったか」を追える)                               |
 | generated_at    | timestamp                      | 生成日時(この値をもとに「24時間以内かどうか」を判定する)                                         |
+| is_helpful       | boolean (nullable)             | この提案が役に立ったか(true/false)。null = 未評価(フェーズ7-5、docs/adr/019)                   |
+| feedback_comment | text (nullable)                | フィードバックの任意コメント(最大500文字。未入力はnull)                                          |
+| feedback_at      | timestamp (nullable)           | フィードバック送信日時(未評価時はnull)                                                          |
 
 - 最新の提案は `ORDER BY generated_at DESC LIMIT 1` で取得
 - 履歴一覧はuser_idで絞り込んで時系列表示する
+- フィードバック(is_helpful / feedback_comment / feedback_at)は別テーブルにせずadvicesのカラムとして持つ。1アドバイス:1フィードバックの厳密な1:1であり、表示のたびに必要になる情報のため(docs/adr/019)。評価の上書きは`PUT /advices/{id}/feedback`で行い、AI生成済みの本文カラムには触れない
 
 ## 4. インデックス方針
 

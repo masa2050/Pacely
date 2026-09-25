@@ -3,7 +3,10 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/masa2050/pacely/backend/internal/model"
 	"github.com/masa2050/pacely/backend/internal/repository"
@@ -149,4 +152,50 @@ func (s *AdviceService) generate(ctx context.Context, userID string, goal *model
 // List は GET /advices(過去の提案履歴一覧)。
 func (s *AdviceService) List(ctx context.Context, userID string) ([]model.Advice, error) {
 	return s.repo.ListByUser(ctx, userID)
+}
+
+// maxFeedbackCommentLen はフィードバックコメントの最大文字数。
+// 自由入力を無制限に受け付けるとDB・将来のプロンプト投入時のコストが読めなくなるため、
+// 「一言添える」用途に十分な長さで上限を設ける。
+const maxFeedbackCommentLen = 500
+
+// FeedbackInput は PUT /advices/{id}/feedback の入力値。
+// IsHelpfulはポインタ: 未送信(nil)と false を区別して400を返すため。
+type FeedbackInput struct {
+	IsHelpful *bool
+	Comment   *string
+}
+
+// SubmitFeedback は表示中のアドバイスへのフィードバックを保存する
+// (フェーズ7-5、docs/adr/019)。
+// 冪等な上書き更新であり、評価をやり直した場合は最後の内容だけが残る。
+func (s *AdviceService) SubmitFeedback(ctx context.Context, userID, adviceID string, in FeedbackInput) (*model.Advice, error) {
+	if in.IsHelpful == nil {
+		return nil, fmt.Errorf("%w: is_helpful は必須です", ErrInvalidInput)
+	}
+
+	comment := in.Comment
+	if comment != nil {
+		// 空白のみの入力は「コメント無し」として扱い、NULLで保存する。
+		trimmed := strings.TrimSpace(*comment)
+		if trimmed == "" {
+			comment = nil
+		} else {
+			if utf8.RuneCountInString(trimmed) > maxFeedbackCommentLen {
+				return nil, fmt.Errorf("%w: comment は%d文字以内で入力してください", ErrInvalidInput, maxFeedbackCommentLen)
+			}
+			comment = &trimmed
+		}
+	}
+
+	// 所有者チェックはservice層で行う(404と403を区別するため、runs/goalsと同じ方針)。
+	existing, err := s.repo.GetByID(ctx, adviceID)
+	if err != nil {
+		return nil, err
+	}
+	if existing.UserID != userID {
+		return nil, ErrForbidden
+	}
+
+	return s.repo.UpdateFeedback(ctx, adviceID, *in.IsHelpful, comment)
 }

@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react'
-import { getLatestAdvice, listAdvices, type Advice, type LatestAdviceResult } from '../lib/api'
+import {
+  getLatestAdvice,
+  listAdvices,
+  submitAdviceFeedback,
+  type Advice,
+  type LatestAdviceResult,
+} from '../lib/api'
 
 function formatPace(paceSecPerKm: number): string {
   const min = Math.floor(paceSecPerKm / 60)
@@ -19,7 +25,83 @@ function formatDuration(totalSec: number): string {
   return `${s}秒`
 }
 
-function AdviceCard({ advice }: { advice: Advice }) {
+// フェーズ7-5: 表示中のアドバイスへのフィードバック(docs/adr/019)。
+// 評価ボタンを押した時点で、その時テキストエリアに入っているコメントも一緒に送る。
+// こうすると「評価」と「コメント」で2回APIを叩かずに済み、押し直せば上書きもできる
+// (PUTなので冪等。未評価に戻す操作は今回のスコープ外)。
+function AdviceFeedback({ advice, onSaved }: { advice: Advice; onSaved: (updated: Advice) => void }) {
+  const [comment, setComment] = useState(advice.feedback_comment ?? '')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function save(isHelpful: boolean) {
+    setSaving(true)
+    setError(null)
+    try {
+      onSaved(await submitAdviceFeedback(advice.id, isHelpful, comment))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="advice-feedback">
+      <p className="advice-feedback__label">この提案は役に立ちましたか?</p>
+      {/* テキストボタン(「役に立った」「役に立たなかった」)を横並びにすると
+          文字量の差で見た目のバランスが悪く分かりにくかったため、意味が
+          直感的に伝わるグッドマーク・バッドマークのアイコンボタンに変更した。
+          aria-labelで意味を明示し、スクリーンリーダーでも区別できるようにする。 */}
+      <div className="advice-feedback__buttons">
+        <button
+          type="button"
+          className={`advice-feedback__button advice-feedback__button--good${advice.is_helpful === true ? ' advice-feedback__button--selected' : ''}`}
+          onClick={() => save(true)}
+          disabled={saving}
+          aria-label="役に立った"
+          aria-pressed={advice.is_helpful === true}
+          title="役に立った"
+        >
+          👍
+        </button>
+        <button
+          type="button"
+          className={`advice-feedback__button advice-feedback__button--bad${advice.is_helpful === false ? ' advice-feedback__button--selected' : ''}`}
+          onClick={() => save(false)}
+          disabled={saving}
+          aria-label="役に立たなかった"
+          aria-pressed={advice.is_helpful === false}
+          title="役に立たなかった"
+        >
+          👎
+        </button>
+      </div>
+
+      <label className="advice-feedback__comment-label">
+        コメント(任意)
+        <textarea
+          className="advice-feedback__comment"
+          value={comment}
+          onChange={(e) => setComment(e.target.value)}
+          maxLength={500}
+          rows={2}
+          placeholder="例: ペースが少しきつかった"
+          disabled={saving}
+        />
+      </label>
+
+      {advice.feedback_at && (
+        <p className="advice-feedback__saved">
+          送信済み({new Date(advice.feedback_at).toLocaleString('ja-JP')})。ボタンを押し直すと上書きされます。
+        </p>
+      )}
+      {error && <p className="dashboard__error">{error}</p>}
+    </div>
+  )
+}
+
+function AdviceCard({ advice, onFeedbackSaved }: { advice: Advice; onFeedbackSaved: (updated: Advice) => void }) {
   const { distance_km, pace_sec_per_km, note } = advice.next_menu
   return (
     <div className="advice-view__card">
@@ -53,6 +135,8 @@ function AdviceCard({ advice }: { advice: Advice }) {
         </p>
       )}
       <p className="advice-view__generated-at">生成日時: {new Date(advice.generated_at).toLocaleString('ja-JP')}</p>
+
+      <AdviceFeedback advice={advice} onSaved={onFeedbackSaved} />
     </div>
   )
 }
@@ -83,6 +167,13 @@ export function AdviceView() {
     fetchLatest()
   }, [])
 
+  // 同じadviceが「最新」と「履歴」の両方に出ることがあるため、保存後のレコードを
+  // 両方に反映して表示がずれないようにする。
+  function applyFeedback(updated: Advice) {
+    setResult((prev) => (prev?.advice?.id === updated.id ? { ...prev, advice: updated } : prev))
+    setHistory((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
+  }
+
   function handleShowHistory() {
     setShowHistory((prev) => !prev)
     if (!showHistory && history.length === 0) {
@@ -105,7 +196,11 @@ export function AdviceView() {
         </p>
       )}
       {result.status === 'needs_active_goal' && <p>AI提案には目標の設定が必要です。まず目標を設定してください。</p>}
-      {result.status === 'ready' && result.advice && <AdviceCard advice={result.advice} />}
+      {/* keyにadvice.idを渡すことで、新しい提案が生成された際にコメント入力欄の
+          state(前の提案に対する入力)が残らないようにする。 */}
+      {result.status === 'ready' && result.advice && (
+        <AdviceCard key={result.advice.id} advice={result.advice} onFeedbackSaved={applyFeedback} />
+      )}
 
       <div className="advice-view__actions">
         <button type="button" onClick={fetchLatest}>
@@ -121,7 +216,7 @@ export function AdviceView() {
           {history.length === 0 && <li>過去の提案はまだありません。</li>}
           {history.map((advice) => (
             <li key={advice.id}>
-              <AdviceCard advice={advice} />
+              <AdviceCard advice={advice} onFeedbackSaved={applyFeedback} />
             </li>
           ))}
         </ul>
