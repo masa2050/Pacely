@@ -167,8 +167,9 @@ export function AdviceView() {
     fetchLatest()
   }, [])
 
-  // 同じadviceが「最新」と「履歴」の両方に出ることがあるため、保存後のレコードを
-  // 両方に反映して表示がずれないようにする。
+  // 履歴側は本日分(result.advice)を除外して描画するが、更新自体は両方のstateに
+  // 反映しておく。history取得後に本日分の提案が更新された場合でも、
+  // フィルタ対象のレコード自体は最新の内容を保っておきたいため。
   function applyFeedback(updated: Advice) {
     setResult((prev) => (prev?.advice?.id === updated.id ? { ...prev, advice: updated } : prev))
     setHistory((prev) => prev.map((a) => (a.id === updated.id ? updated : a)))
@@ -213,12 +214,23 @@ export function AdviceView() {
 
       {showHistory && (
         <ul className="advice-view__history">
-          {history.length === 0 && <li>過去の提案はまだありません。</li>}
-          {history.map((advice) => (
-            <li key={advice.id}>
-              <AdviceCard advice={advice} onFeedbackSaved={applyFeedback} />
-            </li>
-          ))}
+          {/* 本日分(result.advice)はlistAdvices()の結果にも含まれ、同じadviceが
+              「本日の提案」欄と履歴の両方に別インスタンスとして描画されてしまう。
+              それぞれのAdviceFeedbackはマウント時にコメントを読み込むだけなので、
+              片方でコメントを保存してももう片方には反映されず、後から古い方で
+              評価ボタンを押すと空コメントで上書きされて消えてしまう
+              (/code-reviewで指摘)。表示としても同じ提案が二重に出るのは
+              紛らわしいため、履歴側では本日分を除外する。 */}
+          {history.filter((a) => a.id !== result.advice?.id).length === 0 && (
+            <li>過去の提案はまだありません。</li>
+          )}
+          {history
+            .filter((a) => a.id !== result.advice?.id)
+            .map((advice) => (
+              <li key={advice.id}>
+                <AdviceCard advice={advice} onFeedbackSaved={applyFeedback} />
+              </li>
+            ))}
         </ul>
       )}
     </div>

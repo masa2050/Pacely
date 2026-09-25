@@ -334,8 +334,13 @@
   table-layout: fixed;
 }
 
+/* table-layout:fixedでは列幅の合計をテーブル幅ちょうど(100%)に合わせないと、
+   %指定の列とpx固定の列が混在した場合にテーブル幅より狭いカード
+   (PC3カラム表示や480px以下の画面)であふれてしまう(/code-reviewで指摘:
+   以前は30+21+21+11=83%+64px固定で、テーブル幅が約376px未満になると計算が
+   合わなくなっていた)。actionsも%にして合計をちょうど100%にする。 */
 .run-list__col-date {
-  width: 30%;
+  width: 28%;
 }
 
 .run-list__col-distance,
@@ -344,11 +349,11 @@
 }
 
 .run-list__col-rpe {
-  width: 11%;
+  width: 9%;
 }
 
 .run-list__col-actions {
-  width: 64px;
+  width: 21%;
 }
 
 .run-list td {
