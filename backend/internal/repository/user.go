@@ -36,11 +36,13 @@ func (r *UserRepository) GetByID(ctx context.Context, id string) (*model.User, e
 	return &u, nil
 }
 
-// Create はプロフィール行を新規作成する。region・username は未設定(null)で作る。
-func (r *UserRepository) Create(ctx context.Context, id string) (*model.User, error) {
+// Create はプロフィール行を新規作成する。region は未設定(null)で作る。
+// username はサインアップ時にSupabase Authのuser_metadataへ渡された値を受け取れるように
+// 引数で受け取る(フェーズ7-3、docs/adr/017)。nilなら未設定(null)のまま作る。
+func (r *UserRepository) Create(ctx context.Context, id string, username *string) (*model.User, error) {
 	var u model.User
 	row := r.pool.QueryRow(ctx,
-		`INSERT INTO users (id) VALUES ($1) RETURNING id, region, username, created_at`, id)
+		`INSERT INTO users (id, username) VALUES ($1, $2) RETURNING id, region, username, created_at`, id, username)
 	if err := row.Scan(&u.ID, &u.Region, &u.Username, &u.CreatedAt); err != nil {
 		return nil, err
 	}

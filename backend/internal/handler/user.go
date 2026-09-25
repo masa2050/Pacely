@@ -19,10 +19,17 @@ func NewUserHandler(service *service.UserService) *UserHandler {
 }
 
 // GetMe は GET /users/me。
+// プロフィール行が無い(初回アクセス)場合、サインアップ時にSupabase Authの
+// user_metadataへ渡されたusernameがあればそれを使って行を作る(docs/adr/017)。
 func (h *UserHandler) GetMe(c echo.Context) error {
 	userID, _ := c.Get(appmw.ContextUserIDKey).(string)
 
-	user, err := h.service.GetOrCreateMe(c.Request().Context(), userID)
+	var username *string
+	if v, _ := c.Get(appmw.ContextUsernameKey).(string); v != "" {
+		username = &v
+	}
+
+	user, err := h.service.GetOrCreateMeWithUsername(c.Request().Context(), userID, username)
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, "プロフィールの取得に失敗しました")
 	}

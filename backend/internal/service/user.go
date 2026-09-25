@@ -37,13 +37,30 @@ func NewUserService(repo *repository.UserRepository, supabaseURL string, supabas
 // そのため「初回の /users/me アクセス時に行が無ければ作る」という
 // get-or-create方式にして、フロント・バックエンドどちらにも
 // 追加のサインアップ処理を増やさないようにしている。
+//
+// runs/goals/advicesの作成時にも「プロフィール行の存在を保証する」目的で呼ばれるため
+// (internal/service/run.go等)、usernameを持たないシグネチャのまま残す。
+// usernameを渡したい場合はGetOrCreateMeWithUsernameを使う。
 func (s *UserService) GetOrCreateMe(ctx context.Context, userID string) (*model.User, error) {
+	return s.getOrCreate(ctx, userID, nil)
+}
+
+// GetOrCreateMeWithUsername はGetOrCreateMeと同じだが、行を新規作成する際に
+// usernameも一緒に設定する(フェーズ7-3、docs/adr/017)。
+// サインアップ時にsupabase.auth.signUpのoptions.dataへ渡したusernameは、JWTの
+// user_metadataクレーム経由でミドルウェア(appmw.ContextUsernameKey)から取得できる。
+// GET /users/meのハンドラからのみ呼ばれる想定。
+func (s *UserService) GetOrCreateMeWithUsername(ctx context.Context, userID string, username *string) (*model.User, error) {
+	return s.getOrCreate(ctx, userID, username)
+}
+
+func (s *UserService) getOrCreate(ctx context.Context, userID string, username *string) (*model.User, error) {
 	u, err := s.repo.GetByID(ctx, userID)
 	if err == nil {
 		return u, nil
 	}
 	if errors.Is(err, repository.ErrNotFound) {
-		return s.repo.Create(ctx, userID)
+		return s.repo.Create(ctx, userID, username)
 	}
 	return nil, err
 }
