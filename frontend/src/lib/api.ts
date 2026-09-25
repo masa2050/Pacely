@@ -98,6 +98,18 @@ export type RunInput = {
   rpe: number | null
 }
 
+// バックエンドの並び順(run.go ListByUser: run_date DESC, created_at DESC)と合わせる。
+// 作成・編集の直後、レスポンスの1件をローカルのrunsに反映する際は一覧を取り直さず
+// 配列を直接更新しているため、そのときにも同じ並び順になるよう呼び出し側で使う。
+export function sortRuns(runs: Run[]): Run[] {
+  return [...runs].sort((a, b) => {
+    if (a.run_date !== b.run_date) {
+      return a.run_date > b.run_date ? -1 : 1
+    }
+    return a.created_at > b.created_at ? -1 : 1
+  })
+}
+
 export function listRuns(): Promise<Run[]> {
   return authorizedFetch<Run[]>('/runs')
 }

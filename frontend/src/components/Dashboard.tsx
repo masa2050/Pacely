@@ -5,6 +5,7 @@ import {
   listRuns,
   listGoals,
   getActiveGoal,
+  sortRuns,
   type Me,
   type Run,
   type Goal,
@@ -107,7 +108,7 @@ export function Dashboard({ session, onSettingsClick }: Props) {
         <div id="dashboard-runs" className="dashboard__card">
           <h2>ランニング記録</h2>
           {runsError && <p className="dashboard__error">{runsError}</p>}
-          <RunForm onSaved={(run) => setRuns((prev) => [run, ...prev])} />
+          <RunForm onSaved={(run) => setRuns((prev) => sortRuns([run, ...prev]))} />
           <RunList runs={runs} onChanged={setRuns} />
         </div>
       </div>

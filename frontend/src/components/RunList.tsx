@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { deleteRun, type Run } from '../lib/api'
+import { deleteRun, sortRuns, type Run } from '../lib/api'
 import { RunForm } from './RunForm'
 
 type Props = {
@@ -54,7 +54,7 @@ export function RunList({ runs, onChanged }: Props) {
                   <RunForm
                     editingRun={run}
                     onSaved={(updated) => {
-                      onChanged(runs.map((r) => (r.id === updated.id ? updated : r)))
+                      onChanged(sortRuns(runs.map((r) => (r.id === updated.id ? updated : r))))
                       setEditingId(null)
                     }}
                     onCancel={() => setEditingId(null)}
