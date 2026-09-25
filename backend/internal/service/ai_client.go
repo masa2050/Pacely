@@ -21,7 +21,10 @@ type AdvicePromptInput struct {
 	GoalType      string
 	TargetTimeSec int
 	TargetDate    model.Date
-	RecentRuns    []model.Run
+	// Today は生成時点の日付。docs/adr/021・8-2③: レースまでの残日数をAIに
+	// 判断させるための基準日として渡す(buildPrompt側でTargetDateとの差分を計算する)。
+	Today      time.Time
+	RecentRuns []model.Run
 	// RecentMenus は直近に提案したnext_menu(新しい順)。空の場合は初回提案として扱う。
 	// docs/adr/021・8-2①: 「前回と違う刺激を」とAIに明示するために渡す。
 	RecentMenus []model.NextMenu
@@ -79,12 +82,22 @@ func buildPrompt(in AdvicePromptInput) string {
 		recentMenusDesc = b.String()
 	}
 
+	// daysUntilRaceは日付部分のみで日数差を計算する(時刻を含めるとタイムゾーン・
+	// 実行時刻次第で±1日ずれるため)。docs/adr/021・8-2③: 練習の位置づけ
+	// (まだ余裕がある/直前で調整に入るべき等)をAIが判断する材料として渡す。
+	today := time.Date(in.Today.Year(), in.Today.Month(), in.Today.Day(), 0, 0, 0, 0, time.UTC)
+	targetDate := time.Date(in.TargetDate.Year(), in.TargetDate.Month(), in.TargetDate.Day(), 0, 0, 0, 0, time.UTC)
+	daysUntilRace := int(targetDate.Sub(today).Hours() / 24)
+
 	return fmt.Sprintf(`あなたはランニングコーチです。以下のランナーの情報をもとに、次の練習に向けたアドバイスと具体的な練習メニューを提案してください。
+
+## 今日の日付
+%s
 
 ## 目標
 種目: %s
 目標タイム: %d秒
-目標達成予定日: %s
+目標達成予定日: %s(残り%d日)
 
 ## 直近の記録
 %s
@@ -108,7 +121,8 @@ func buildPrompt(in AdvicePromptInput) string {
     "note": "練習メニューの補足(日本語、1〜2文)"
   }
 }`,
-		in.GoalType, in.TargetTimeSec, in.TargetDate.Format("2006-01-02"),
+		today.Format("2006-01-02"),
+		in.GoalType, in.TargetTimeSec, in.TargetDate.Format("2006-01-02"), daysUntilRace,
 		runsDesc.String(), recentMenusDesc, weatherDesc, "```")
 }
 

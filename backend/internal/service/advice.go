@@ -147,6 +147,7 @@ func (s *AdviceService) generate(ctx context.Context, userID string, goal *model
 		GoalType:      goal.GoalType,
 		TargetTimeSec: goal.TargetTimeSec,
 		TargetDate:    goal.TargetDate,
+		Today:         time.Now(),
 		RecentRuns:    recentRuns,
 		RecentMenus:   recentMenus,
 		Weather:       weather,
