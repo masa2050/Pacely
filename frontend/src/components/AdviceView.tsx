@@ -101,8 +101,14 @@ function AdviceFeedback({ advice, onSaved }: { advice: Advice; onSaved: (updated
   )
 }
 
+// 8-2②(docs/adr/021)でmenu_typeが「休養」の場合、distance_km/pace_sec_per_kmは
+// プロンプト指示上0で返る(BE ai_client.goのbuildPrompt参照)。0km・0:00/kmと
+// 表示すると練習メニューに見えて紛らわしいため、休養日は種別とnoteだけを表示する。
+const REST_MENU_TYPE = '休養'
+
 function AdviceCard({ advice, onFeedbackSaved }: { advice: Advice; onFeedbackSaved: (updated: Advice) => void }) {
-  const { distance_km, pace_sec_per_km, note } = advice.next_menu
+  const { menu_type, distance_km, pace_sec_per_km, note } = advice.next_menu
+  const isRest = menu_type === REST_MENU_TYPE
   return (
     <div className="advice-view__card">
       <p className="advice-view__text">{advice.advice_text}</p>
@@ -114,17 +120,25 @@ function AdviceCard({ advice, onFeedbackSaved }: { advice: Advice; onFeedbackSav
         <p className="advice-view__menu-label">本日の練習メニュー</p>
         <div className="advice-view__stats">
           <div className="advice-view__stat">
-            <span className="advice-view__stat-label">距離</span>
-            <span className="advice-view__stat-value">{distance_km}km</span>
+            <span className="advice-view__stat-label">種別</span>
+            <span className="advice-view__stat-value">{menu_type || '不明'}</span>
           </div>
-          <div className="advice-view__stat">
-            <span className="advice-view__stat-label">ペース</span>
-            <span className="advice-view__stat-value">{formatPace(pace_sec_per_km)}</span>
-          </div>
-          <div className="advice-view__stat">
-            <span className="advice-view__stat-label">合計時間</span>
-            <span className="advice-view__stat-value">{formatDuration(distance_km * pace_sec_per_km)}</span>
-          </div>
+          {!isRest && (
+            <>
+              <div className="advice-view__stat">
+                <span className="advice-view__stat-label">距離</span>
+                <span className="advice-view__stat-value">{distance_km}km</span>
+              </div>
+              <div className="advice-view__stat">
+                <span className="advice-view__stat-label">ペース</span>
+                <span className="advice-view__stat-value">{formatPace(pace_sec_per_km)}</span>
+              </div>
+              <div className="advice-view__stat">
+                <span className="advice-view__stat-label">合計時間</span>
+                <span className="advice-view__stat-value">{formatDuration(distance_km * pace_sec_per_km)}</span>
+              </div>
+            </>
+          )}
         </div>
         {note && <p className="advice-view__note">{note}</p>}
       </div>

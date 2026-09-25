@@ -24,9 +24,36 @@ type Advice struct {
 	FeedbackAt      *time.Time `json:"feedback_at"`
 }
 
+// MenuType の許容値(docs/implementation-plan.md 8-2②、docs/adr/021)。
+// distance_km/pace_sec_per_km だけでは「一定ペースで何km走るか」しか表現できず
+// 構造的にペース走へ収束していたため、練習の種別を明示的に持たせる。
+const (
+	MenuTypeJog      = "ジョグ"
+	MenuTypePace     = "ペース走"
+	MenuTypeInterval = "インターバル"
+	MenuTypeLong     = "ロング走"
+	MenuTypeRest     = "休養"
+)
+
+// ValidMenuTypes はAI出力の検証・FE表示の両方から参照する順序付きの一覧。
+var ValidMenuTypes = []string{MenuTypeJog, MenuTypePace, MenuTypeInterval, MenuTypeLong, MenuTypeRest}
+
+// IsValidMenuType はAIが指示通りの列挙値を返したかを確認する。
+// 想定外の値でもエラーにはせず(jsonbは値を制約しない、docs/database.md 5.)、
+// 呼び出し側でログに残すためだけに使う。
+func IsValidMenuType(s string) bool {
+	for _, v := range ValidMenuTypes {
+		if s == v {
+			return true
+		}
+	}
+	return false
+}
+
 // NextMenu は次回練習メニュー(docs/database.md 3.4 next_menu)。
 // jsonb列に対応させるため、Scan/ValueでJSON⇔Goの相互変換を行う。
 type NextMenu struct {
+	MenuType     string  `json:"menu_type"`
 	DistanceKm   float64 `json:"distance_km"`
 	PaceSecPerKm float64 `json:"pace_sec_per_km"`
 	Note         string  `json:"note"`

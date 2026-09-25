@@ -213,6 +213,10 @@ export async function getActiveGoalProgress(): Promise<Progress | null> {
 }
 
 export type NextMenu = {
+  // BEはenum(ジョグ/ペース走/インターバル/ロング走/休養、docs/adr/021)を返す想定だが、
+  // AIが指示通りの値を返す保証はなく厳密な型では守れないためstringにしておく
+  // (BE側もmodel.IsValidMenuTypeでログのみ・エラーにはしていない、8-2②)。
+  menu_type: string
   distance_km: number
   pace_sec_per_km: number
   note: string

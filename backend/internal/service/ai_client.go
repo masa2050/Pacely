@@ -81,7 +81,12 @@ func buildPrompt(in AdvicePromptInput) string {
 	if len(in.RecentMenus) > 0 {
 		var b strings.Builder
 		for i, m := range in.RecentMenus {
-			fmt.Fprintf(&b, "- %d回前: %.1fkm / %.0f秒/km", i+1, m.DistanceKm, m.PaceSecPerKm)
+			menuType := m.MenuType
+			if menuType == "" {
+				// 8-2②導入前(menu_typeが無い時代)に生成された古い提案への後方互換。
+				menuType = "種別不明"
+			}
+			fmt.Fprintf(&b, "- %d回前: %s %.1fkm / %.0f秒/km", i+1, menuType, m.DistanceKm, m.PaceSecPerKm)
 			if m.Note != "" {
 				fmt.Fprintf(&b, " (%s)", m.Note)
 			}
@@ -112,9 +117,10 @@ func buildPrompt(in AdvicePromptInput) string {
 
 ## 前回までに提案した練習メニュー(新しい順)
 %s
-同じ距離・同じペースの練習を連続で提案しないでください。前回までの提案を踏まえ、
-今回は意図的に違う刺激(距離やペースを変える、負荷を上げる/下げる等)を与える
-練習を提案してください。
+同じ種別・同じ距離・同じペースの練習を連続で提案しないでください。前回までの提案を踏まえ、
+今回は意図的に違う刺激(練習の種別を変える、距離やペースを変える、負荷を上げる/下げる等)を
+与える練習を提案してください。練習には休養日も含まれます。連日ハードな練習を提案し続けず、
+必要に応じて休養やジョグ(軽い回復走)も選択肢に入れてください。
 
 ## 現在の天候
 %s
@@ -124,14 +130,16 @@ func buildPrompt(in AdvicePromptInput) string {
 {
   "advice_text": "アドバイス本文(日本語、200字程度)",
   "next_menu": {
-    "distance_km": 次回練習の距離(数値、km),
-    "pace_sec_per_km": 次回練習の目標ペース(数値、秒/km),
+    "menu_type": 次回練習の種別。必ず次のいずれか1つ: %s,
+    "distance_km": 次回練習の距離(数値、km)。menu_typeが"%s"の場合は0,
+    "pace_sec_per_km": 次回練習の目標ペース(数値、秒/km)。menu_typeが"%s"の場合は0,
     "note": "練習メニューの補足(日本語、1〜2文)"
   }
 }`,
 		today.Format("2006-01-02"),
 		in.GoalType, in.TargetTimeSec, in.TargetDate.Format("2006-01-02"), daysUntilRace,
-		runsDesc.String(), recentMenusDesc, weatherDesc, "```")
+		runsDesc.String(), recentMenusDesc, weatherDesc, "```",
+		`"`+strings.Join(model.ValidMenuTypes, `", "`)+`"`, model.MenuTypeRest, model.MenuTypeRest)
 }
 
 const (
@@ -189,6 +197,7 @@ type geminiResponse struct {
 type adviceJSON struct {
 	AdviceText string `json:"advice_text"`
 	NextMenu   struct {
+		MenuType     string  `json:"menu_type"`
 		DistanceKm   float64 `json:"distance_km"`
 		PaceSecPerKm float64 `json:"pace_sec_per_km"`
 		Note         string  `json:"note"`
@@ -248,10 +257,17 @@ func (c *GeminiClient) GenerateAdvice(ctx context.Context, in AdvicePromptInput)
 		log.Printf("advice: gemini output json parse failed: %v (raw: %s)", err, gr.Candidates[0].Content.Parts[0].Text)
 		return AdviceGeneration{}, fmt.Errorf("%w: AI出力のJSON解析に失敗しました", ErrExternalAPI)
 	}
+	// menu_typeはプロンプトで列挙値を指示しているが、AIが指示通りに返す保証はない
+	// (jsonbは値を制約しないため実行時エラーにはできない、docs/database.md 5.)。
+	// 提案自体は止めず、想定外の値だった場合だけログに残して後から傾向を追えるようにする。
+	if !model.IsValidMenuType(parsed.NextMenu.MenuType) {
+		log.Printf("advice: gemini returned unexpected menu_type: %q", parsed.NextMenu.MenuType)
+	}
 
 	return AdviceGeneration{
 		AdviceText: parsed.AdviceText,
 		NextMenu: model.NextMenu{
+			MenuType:     parsed.NextMenu.MenuType,
 			DistanceKm:   parsed.NextMenu.DistanceKm,
 			PaceSecPerKm: parsed.NextMenu.PaceSecPerKm,
 			Note:         parsed.NextMenu.Note,
