@@ -5,6 +5,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"fmt"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -57,13 +59,31 @@ func (r *UserRepository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-// UpdateProfile はregion・usernameを更新する。どちらもポインタで、nilの場合は
-// COALESCEで既存値のまま変更しない(PUT /users/meで片方だけ送るケースに対応するため)。
+// UpdateProfile はregion・usernameを更新する。どちらもポインタで、
+// nil(リクエストにフィールドが無い)なら既存値のまま変更しない。
+// ポインタが指す値が空文字の場合は、その項目をNULL(未設定)にクリアする
+// (地域を「(未設定)」に戻せなかった不具合の修正、docs/database.md 3.1)。
 func (r *UserRepository) UpdateProfile(ctx context.Context, id string, region, username *string) (*model.User, error) {
+	sets := make([]string, 0, 2)
+	args := make([]any, 0, 3)
+
+	addField := func(column string, value *string) {
+		if value == nil {
+			return
+		}
+		args = append(args, nullIfEmpty(*value))
+		sets = append(sets, fmt.Sprintf("%s = $%d", column, len(args)))
+	}
+	addField("region", region)
+	addField("username", username)
+
+	args = append(args, id)
+	query := fmt.Sprintf(
+		`UPDATE users SET %s WHERE id = $%d RETURNING id, region, username, created_at`,
+		strings.Join(sets, ", "), len(args))
+
 	var u model.User
-	row := r.pool.QueryRow(ctx,
-		`UPDATE users SET region = COALESCE($1, region), username = COALESCE($2, username)
-		 WHERE id = $3 RETURNING id, region, username, created_at`, region, username, id)
+	row := r.pool.QueryRow(ctx, query, args...)
 	if err := row.Scan(&u.ID, &u.Region, &u.Username, &u.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrNotFound
@@ -71,4 +91,11 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, id string, region, u
 		return nil, err
 	}
 	return &u, nil
+}
+
+func nullIfEmpty(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }

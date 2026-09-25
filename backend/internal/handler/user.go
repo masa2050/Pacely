@@ -42,9 +42,10 @@ type updateMeRequest struct {
 }
 
 // UpdateMe は PUT /users/me。region(天候取得用の地域)・username(表示名)を更新する。
-// 両方ともポインタで受け取り、リクエストに含まれなかったフィールドは変更しない
+// 両方ともポインタで受け取り、リクエストに含まれなかったフィールド(nil)は変更しない
 // (フェーズ7-2までのregion単体保存フォームと、フェーズ7-3で追加したusername保存フォームを
-// 同じエンドポイントで共存させるため)。
+// 同じエンドポイントで共存させるため)。含まれているが空文字のフィールドは、
+// その項目を明示的に未設定へ戻す(「(未設定)」を選び直して保存するケース)ものとして扱う。
 func (h *UserHandler) UpdateMe(c echo.Context) error {
 	userID, _ := c.Get(appmw.ContextUserIDKey).(string)
 
@@ -54,12 +55,6 @@ func (h *UserHandler) UpdateMe(c echo.Context) error {
 	}
 	if body.Region == nil && body.Username == nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "region かusernameのいずれかが必要です")
-	}
-	if body.Region != nil && *body.Region == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "region は空にできません")
-	}
-	if body.Username != nil && *body.Username == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "username は空にできません")
 	}
 
 	user, err := h.service.UpdateProfile(c.Request().Context(), userID, body.Region, body.Username)

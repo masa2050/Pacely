@@ -2,12 +2,13 @@
 package service
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/masa2050/pacely/backend/internal/model"
@@ -76,9 +77,16 @@ func (s *UserService) UpdateProfile(ctx context.Context, userID string, region, 
 // 再認証してから呼び出す前提とし、ここでは新しいパスワードの設定のみを行う
 // (DeleteAccountと同じ管理者API呼び出しパターン)。
 func (s *UserService) UpdatePassword(ctx context.Context, userID string, newPassword string) error {
-	payload := fmt.Sprintf(`{"password":%q}`, newPassword)
+	// %qはGo文字列のエスケープ規則でありJSONのエスケープ規則とは異なるため、
+	// 制御文字を含むパスワードで不正なJSONになるのを避けるためjson.Marshalを使う。
+	payload, err := json.Marshal(struct {
+		Password string `json:"password"`
+	}{Password: newPassword})
+	if err != nil {
+		return err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPut,
-		s.supabaseURL+"/auth/v1/admin/users/"+userID, strings.NewReader(payload))
+		s.supabaseURL+"/auth/v1/admin/users/"+userID, bytes.NewReader(payload))
 	if err != nil {
 		return err
 	}

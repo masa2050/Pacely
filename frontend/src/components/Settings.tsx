@@ -41,22 +41,14 @@ export function Settings({ session, onBack }: Props) {
       .catch((err) => setError(err.message))
   }, [])
 
-  // 未入力のフィールドはリクエストに含めない。バックエンドは空文字を400で弾くため
-  // (「片方だけ更新」をボディにフィールドが有るかどうかで判定している、docs/adr/017)、
-  // 例えば地域未設定のユーザーがユーザーネームだけ保存するケースで失敗しないようにする。
+  // regionは空文字(「(未設定)」選択時)も含めて常にそのまま送る。バックエンド側は
+  // 空文字を「未設定に戻す」指示として扱うため、これで地域のクリアも保存できる
+  // (docs/api.md 2.6)。
   async function handleSaveProfile() {
-    const input: { region?: string; username?: string } = {}
-    if (region) input.region = region
-    if (username) input.username = username
-    if (!input.region && !input.username) {
-      setError('ユーザーネームか地域のいずれかを入力してください')
-      return
-    }
-
     setSaving(true)
     setError(null)
     try {
-      const updated = await updateMyProfile(input)
+      const updated = await updateMyProfile({ region, username })
       setMe(updated)
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err))
