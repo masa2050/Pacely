@@ -74,6 +74,29 @@ func (r *AdviceRepository) ListByUser(ctx context.Context, userID string) ([]mod
 	return advices, rows.Err()
 }
 
+// ListRecentByUser は直近limit件の提案を新しい順に返す(docs/adr/021、8-2①)。
+// AIへのプロンプトに「前回までに何を提案したか」を渡し、同じメニューへの
+// 収束を避けるために使う。
+func (r *AdviceRepository) ListRecentByUser(ctx context.Context, userID string, limit int) ([]model.Advice, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+adviceColumns+` FROM advices WHERE user_id = $1 ORDER BY generated_at DESC LIMIT $2`,
+		userID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	advices := []model.Advice{}
+	for rows.Next() {
+		a, err := scanAdvice(rows)
+		if err != nil {
+			return nil, err
+		}
+		advices = append(advices, *a)
+	}
+	return advices, rows.Err()
+}
+
 // GetByID は所有者を問わず1件取得する。所有者チェック(403)はservice層で行うため、
 // 「存在しない(404)」と「自分のものではない(403)」を区別できるようにしている
 // (runs/goalsと同じ方針、docs/api.md 4.)。

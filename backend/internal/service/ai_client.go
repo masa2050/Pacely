@@ -22,7 +22,10 @@ type AdvicePromptInput struct {
 	TargetTimeSec int
 	TargetDate    model.Date
 	RecentRuns    []model.Run
-	Weather       model.WeatherContext
+	// RecentMenus は直近に提案したnext_menu(新しい順)。空の場合は初回提案として扱う。
+	// docs/adr/021・8-2①: 「前回と違う刺激を」とAIに明示するために渡す。
+	RecentMenus []model.NextMenu
+	Weather     model.WeatherContext
 }
 
 // AdviceGeneration はAI生成結果(docs/database.md 3.4のadvice_text/next_menuに対応)。
@@ -60,6 +63,22 @@ func buildPrompt(in AdvicePromptInput) string {
 		weatherDesc = fmt.Sprintf("%s / 気温%.1f℃", in.Weather.Description, in.Weather.TempC)
 	}
 
+	// recentMenusDescは「前回までに何を提案したか」をAIに伝える(docs/adr/021、8-2①)。
+	// これが無いとAIは自分の過去の提案を知らず、毎回ゼロから最適解を考えて同じ答えに
+	// 収束してしまう(距離5/8/10km・340秒/kmのペース走が5回連続で提案された実例あり)。
+	recentMenusDesc := "前回までの提案なし(初回の提案)"
+	if len(in.RecentMenus) > 0 {
+		var b strings.Builder
+		for i, m := range in.RecentMenus {
+			fmt.Fprintf(&b, "- %d回前: %.1fkm / %.0f秒/km", i+1, m.DistanceKm, m.PaceSecPerKm)
+			if m.Note != "" {
+				fmt.Fprintf(&b, " (%s)", m.Note)
+			}
+			b.WriteString("\n")
+		}
+		recentMenusDesc = b.String()
+	}
+
 	return fmt.Sprintf(`あなたはランニングコーチです。以下のランナーの情報をもとに、次の練習に向けたアドバイスと具体的な練習メニューを提案してください。
 
 ## 目標
@@ -69,6 +88,12 @@ func buildPrompt(in AdvicePromptInput) string {
 
 ## 直近の記録
 %s
+
+## 前回までに提案した練習メニュー(新しい順)
+%s
+同じ距離・同じペースの練習を連続で提案しないでください。前回までの提案を踏まえ、
+今回は意図的に違う刺激(距離やペースを変える、負荷を上げる/下げる等)を与える
+練習を提案してください。
 
 ## 現在の天候
 %s
@@ -84,7 +109,7 @@ func buildPrompt(in AdvicePromptInput) string {
   }
 }`,
 		in.GoalType, in.TargetTimeSec, in.TargetDate.Format("2006-01-02"),
-		runsDesc.String(), weatherDesc, "```")
+		runsDesc.String(), recentMenusDesc, weatherDesc, "```")
 }
 
 const (
