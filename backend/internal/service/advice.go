@@ -31,6 +31,12 @@ const recentRunsForAdvicePrompt = recentRunsForProgress
 // 件数を増やすほどプロンプトが長くなるため、まずは最小限から始める。
 const recentAdvicesForPrompt = 3
 
+// jst はプロンプトに渡す「今日の日付」(8-2③)をJST基準で計算するために使う
+// (/code-review指摘)。本番はRailwayのalpine系イメージ(tzdata未導入)で動くため
+// time.LoadLocation("Asia/Tokyo")は失敗しうる。日本はDSTが無く常にUTC+9固定のため、
+// tzdataに依存しないFixedZoneで十分。
+var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
+
 // AdviceStatus は GET /advices/latest のレスポンスがどの状態かを表す
 // (docs/api.md 3.の生成判定フローに対応)。
 type AdviceStatus string
@@ -123,7 +129,7 @@ func (s *AdviceService) generate(ctx context.Context, userID string, goal *model
 		return nil, err
 	}
 
-	recentAdvices, err := s.repo.ListRecentByUser(ctx, userID, recentAdvicesForPrompt)
+	recentAdvices, err := s.repo.ListRecentByGoal(ctx, userID, goal.ID, recentAdvicesForPrompt)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +153,7 @@ func (s *AdviceService) generate(ctx context.Context, userID string, goal *model
 		GoalType:      goal.GoalType,
 		TargetTimeSec: goal.TargetTimeSec,
 		TargetDate:    goal.TargetDate,
-		Today:         time.Now(),
+		Today:         time.Now().In(jst),
 		RecentRuns:    recentRuns,
 		RecentMenus:   recentMenus,
 		Weather:       weather,

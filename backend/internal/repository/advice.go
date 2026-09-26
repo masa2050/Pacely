@@ -54,15 +54,9 @@ func (r *AdviceRepository) GetLatestByUser(ctx context.Context, userID string) (
 	return scanAdvice(row)
 }
 
-// ListByUser はuser_idで絞り込んだ提案履歴を新しい順に返す(GET /advices)。
-func (r *AdviceRepository) ListByUser(ctx context.Context, userID string) ([]model.Advice, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT `+adviceColumns+` FROM advices WHERE user_id = $1 ORDER BY generated_at DESC`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
+// scanAdvices はrows.Next()のループを1か所にまとめ、ListByUser/ListRecentByUserで
+// 重複させない(/code-review指摘)。
+func scanAdvices(rows pgx.Rows) ([]model.Advice, error) {
 	advices := []model.Advice{}
 	for rows.Next() {
 		a, err := scanAdvice(rows)
@@ -74,27 +68,32 @@ func (r *AdviceRepository) ListByUser(ctx context.Context, userID string) ([]mod
 	return advices, rows.Err()
 }
 
-// ListRecentByUser は直近limit件の提案を新しい順に返す(docs/adr/021、8-2①)。
-// AIへのプロンプトに「前回までに何を提案したか」を渡し、同じメニューへの
-// 収束を避けるために使う。
-func (r *AdviceRepository) ListRecentByUser(ctx context.Context, userID string, limit int) ([]model.Advice, error) {
+// ListByUser はuser_idで絞り込んだ提案履歴を新しい順に返す(GET /advices)。
+func (r *AdviceRepository) ListByUser(ctx context.Context, userID string) ([]model.Advice, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+adviceColumns+` FROM advices WHERE user_id = $1 ORDER BY generated_at DESC LIMIT $2`,
-		userID, limit)
+		`SELECT `+adviceColumns+` FROM advices WHERE user_id = $1 ORDER BY generated_at DESC`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
+	return scanAdvices(rows)
+}
 
-	advices := []model.Advice{}
-	for rows.Next() {
-		a, err := scanAdvice(rows)
-		if err != nil {
-			return nil, err
-		}
-		advices = append(advices, *a)
+// ListRecentByGoal は同じgoal_idに絞り込んだ直近limit件の提案を新しい順に返す
+// (docs/adr/021、8-2①)。AIへのプロンプトに「前回までに何を提案したか」を渡し、
+// 同じメニューへの収束を避けるために使う。goal_idで絞るのは、目標を切り替えた
+// 直後に旧目標向けの提案履歴が新しい目標の提案に混ざらないようにするため
+// (/code-review指摘: 5km目標→フルマラソン目標に切り替えた直後、旧目標の
+// 短い距離のメニューが「前回と違う刺激を」の基準に混ざるのは不自然)。
+func (r *AdviceRepository) ListRecentByGoal(ctx context.Context, userID, goalID string, limit int) ([]model.Advice, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+adviceColumns+` FROM advices WHERE user_id = $1 AND goal_id = $2 ORDER BY generated_at DESC LIMIT $3`,
+		userID, goalID, limit)
+	if err != nil {
+		return nil, err
 	}
-	return advices, rows.Err()
+	defer rows.Close()
+	return scanAdvices(rows)
 }
 
 // GetByID は所有者を問わず1件取得する。所有者チェック(403)はservice層で行うため、

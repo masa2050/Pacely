@@ -102,6 +102,14 @@ func buildPrompt(in AdvicePromptInput) string {
 	targetDate := time.Date(in.TargetDate.Year(), in.TargetDate.Month(), in.TargetDate.Day(), 0, 0, 0, 0, time.UTC)
 	daysUntilRace := int(targetDate.Sub(today).Hours() / 24)
 
+	// goals.status=activeのままtarget_dateが過去日になっているケース(レース後も
+	// 目標を編集していないユーザー)では、「残り-5日」という不自然な表現になるため
+	// 分けて表記する(/code-review指摘)。
+	daysUntilRaceDesc := fmt.Sprintf("残り%d日", daysUntilRace)
+	if daysUntilRace < 0 {
+		daysUntilRaceDesc = fmt.Sprintf("目標達成予定日を%d日過ぎています", -daysUntilRace)
+	}
+
 	return fmt.Sprintf(`あなたはランニングコーチです。以下のランナーの情報をもとに、次の練習に向けたアドバイスと具体的な練習メニューを提案してください。
 
 ## 今日の日付
@@ -110,7 +118,7 @@ func buildPrompt(in AdvicePromptInput) string {
 ## 目標
 種目: %s
 目標タイム: %d秒
-目標達成予定日: %s(残り%d日)
+目標達成予定日: %s(%s)
 
 ## 直近の記録
 %s
@@ -137,7 +145,7 @@ func buildPrompt(in AdvicePromptInput) string {
   }
 }`,
 		today.Format("2006-01-02"),
-		in.GoalType, in.TargetTimeSec, in.TargetDate.Format("2006-01-02"), daysUntilRace,
+		in.GoalType, in.TargetTimeSec, in.TargetDate.Format("2006-01-02"), daysUntilRaceDesc,
 		runsDesc.String(), recentMenusDesc, weatherDesc, "```",
 		`"`+strings.Join(model.ValidMenuTypes, `", "`)+`"`, model.MenuTypeRest, model.MenuTypeRest)
 }
@@ -211,7 +219,10 @@ func (c *GeminiClient) GenerateAdvice(ctx context.Context, in AdvicePromptInput)
 	}
 	b, err := json.Marshal(reqBody)
 	if err != nil {
-		return AdviceGeneration{}, err
+		// reqBodyは文字列のみで現状Marshal失敗は起きないが、8-1の方針(外部API絡みの
+		// エラーはerr.Error()をそのまま返さない)に合わせて他の分岐と統一しておく。
+		log.Printf("advice: gemini request marshal failed: %v", err)
+		return AdviceGeneration{}, fmt.Errorf("%w: AIリクエストの組み立てに失敗しました", ErrExternalAPI)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, geminiEndpoint+"?key="+c.apiKey, bytes.NewReader(b))
