@@ -81,12 +81,15 @@ func buildPrompt(in AdvicePromptInput) string {
 	if len(in.RecentMenus) > 0 {
 		var b strings.Builder
 		for i, m := range in.RecentMenus {
-			menuType := m.MenuType
-			if menuType == "" {
-				// 8-2②導入前(menu_typeが無い時代)に生成された古い提案への後方互換。
-				menuType = "種別不明"
+			// menu_typeが空なのは8-2②導入前に生成された古い提案(後方互換)。
+			// ここで「種別不明」のような代替ラベルを本物の種別と同じ位置に置くと、
+			// Geminiがそれを選択肢の一つと誤解してmenu_typeにそのまま返してくる
+			// (本番で実際に発生)。種別が無い行では種別のスロット自体を空にする。
+			if m.MenuType != "" {
+				fmt.Fprintf(&b, "- %d回前: %s %.1fkm / %.0f秒/km", i+1, m.MenuType, m.DistanceKm, m.PaceSecPerKm)
+			} else {
+				fmt.Fprintf(&b, "- %d回前: %.1fkm / %.0f秒/km", i+1, m.DistanceKm, m.PaceSecPerKm)
 			}
-			fmt.Fprintf(&b, "- %d回前: %s %.1fkm / %.0f秒/km", i+1, menuType, m.DistanceKm, m.PaceSecPerKm)
 			if m.Note != "" {
 				fmt.Fprintf(&b, " (%s)", m.Note)
 			}
@@ -138,7 +141,7 @@ func buildPrompt(in AdvicePromptInput) string {
 {
   "advice_text": "アドバイス本文(日本語、200字程度)",
   "next_menu": {
-    "menu_type": 次回練習の種別。必ず次のいずれか1つ: %s,
+    "menu_type": 次回練習の種別。上記「前回までに提案した練習メニュー」の表記に関わらず、必ず次のいずれか1つを完全一致で使うこと: %s,
     "distance_km": 次回練習の距離(数値、km)。menu_typeが"%s"の場合は0,
     "pace_sec_per_km": 次回練習の目標ペース(数値、秒/km)。menu_typeが"%s"の場合は0,
     "note": "練習メニューの補足(日本語、1〜2文)"
