@@ -107,7 +107,7 @@ function AdviceFeedback({ advice, onSaved }: { advice: Advice; onSaved: (updated
 const REST_MENU_TYPE = '休養'
 
 function AdviceCard({ advice, onFeedbackSaved }: { advice: Advice; onFeedbackSaved: (updated: Advice) => void }) {
-  const { menu_type, distance_km, pace_sec_per_km, note } = advice.next_menu
+  const { menu_type, distance_km, pace_sec_per_km, note, segments } = advice.next_menu
   const isRest = menu_type === REST_MENU_TYPE
   return (
     <div className="advice-view__card">
@@ -145,6 +145,21 @@ function AdviceCard({ advice, onFeedbackSaved }: { advice: Advice; onFeedbackSav
             </>
           )}
         </div>
+        {/* segmentsは現時点でビルドアップ走のみ入る(docs/adr/022)。distance_km/
+            pace_sec_per_kmという合計・代表値だけでは表現できない、区間ごとの
+            ペース変化の内訳を補足として表示する。無ければ何も出さず、従来通り
+            上のstatsだけで完結する。 */}
+        {segments && segments.length > 0 && (
+          <ol className="advice-view__segments">
+            {segments.map((seg, i) => (
+              <li key={i}>
+                {seg.reps > 1 ? `${seg.reps}本 × ` : ''}
+                {seg.distance_km}km / {formatPace(seg.pace_sec_per_km)}
+                {seg.rest_sec > 0 && `(レスト${seg.rest_sec}秒)`}
+              </li>
+            ))}
+          </ol>
+        )}
         {note && <p className="advice-view__note">{note}</p>}
       </div>
 

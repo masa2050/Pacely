@@ -212,14 +212,27 @@ export async function getActiveGoalProgress(): Promise<Progress | null> {
   }
 }
 
+// MenuSegment は1回の練習内で区間ごとに条件が変わる練習(現時点ではビルドアップ走のみ)の
+// 区間1つ分。インターバル等にも将来再利用できる形だが、reps/rest_secはビルドアップ走では
+// 常に1/0で返る(docs/adr/022)。
+export type MenuSegment = {
+  reps: number
+  distance_km: number
+  pace_sec_per_km: number
+  rest_sec: number
+}
+
 export type NextMenu = {
-  // BEはenum(ジョグ/ペース走/インターバル/ロング走/休養、docs/adr/021)を返す想定だが、
-  // AIが指示通りの値を返す保証はなく厳密な型では守れないためstringにしておく
+  // BEはenum(ジョグ/ペース走/インターバル/ロング走/休養/ビルドアップ走、docs/adr/021・022)を
+  // 返す想定だが、AIが指示通りの値を返す保証はなく厳密な型では守れないためstringにしておく
   // (BE側もmodel.IsValidMenuTypeでログのみ・エラーにはしていない、8-2②)。
   menu_type: string
   distance_km: number
   pace_sec_per_km: number
   note: string
+  // ビルドアップ走の時のみ入る区間の内訳(docs/adr/022)。無ければ従来通りdistance_km/
+  // pace_sec_per_kmの単一値だけで表示する。
+  segments?: MenuSegment[]
 }
 
 export type WeatherContext = {
