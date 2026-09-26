@@ -64,7 +64,7 @@ Supabase Authが管理するユーザーテーブルをベースに利用する(
 | user_id         | uuid (FK → users.id)           |                                                                                                  |
 | goal_id         | uuid (FK → goals.id, nullable) | どの目標に対する提案か(目標未設定時はnull)                                                       |
 | advice_text     | text                           | AIによるアドバイス本文                                                                           |
-| next_menu       | jsonb                          | 次回練習メニュー(構造化データ。例: `{"distance_km": 10, "pace_sec_per_km": 330, "note": "..."}`) |
+| next_menu       | jsonb                          | 次回練習メニュー(構造化データ。例: `{"menu_type": "ペース走", "distance_km": 10, "pace_sec_per_km": 330, "note": "..."}`。menu_typeは「ジョグ/ペース走/インターバル/ロング走/休養」のいずれか、8-2②・docs/adr/021) |
 | weather_context | jsonb                          | 生成時に参照した天候情報(後から「なぜこの提案になったか」を追える)                               |
 | generated_at    | timestamp                      | 生成日時(この値をもとに「24時間以内かどうか」を判定する)                                         |
 | is_helpful       | boolean (nullable)             | この提案が役に立ったか(true/false)。null = 未評価(フェーズ7-5、docs/adr/019)                   |

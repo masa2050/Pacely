@@ -25,6 +25,18 @@ const adviceFreshWindow = 24 * time.Hour
 // (「直近の傾向」を渡すという目的が共通のため)。
 const recentRunsForAdvicePrompt = recentRunsForProgress
 
+// recentAdvicesForPrompt はAIプロンプトに渡す「前回までに提案したメニュー」の件数
+// (docs/adr/021、8-2①)。直近5回連続で同じメニューに収束した実例があったため、
+// 直近3回分を見せれば「前回と違う刺激を」という指示の根拠として十分と判断した。
+// 件数を増やすほどプロンプトが長くなるため、まずは最小限から始める。
+const recentAdvicesForPrompt = 3
+
+// jst はプロンプトに渡す「今日の日付」(8-2③)をJST基準で計算するために使う
+// (/code-review指摘)。本番はRailwayのalpine系イメージ(tzdata未導入)で動くため
+// time.LoadLocation("Asia/Tokyo")は失敗しうる。日本はDSTが無く常にUTC+9固定のため、
+// tzdataに依存しないFixedZoneで十分。
+var jst = time.FixedZone("Asia/Tokyo", 9*60*60)
+
 // AdviceStatus は GET /advices/latest のレスポンスがどの状態かを表す
 // (docs/api.md 3.の生成判定フローに対応)。
 type AdviceStatus string
@@ -117,6 +129,15 @@ func (s *AdviceService) generate(ctx context.Context, userID string, goal *model
 		return nil, err
 	}
 
+	recentAdvices, err := s.repo.ListRecentByGoal(ctx, userID, goal.ID, recentAdvicesForPrompt)
+	if err != nil {
+		return nil, err
+	}
+	recentMenus := make([]model.NextMenu, len(recentAdvices))
+	for i, a := range recentAdvices {
+		recentMenus[i] = a.NextMenu
+	}
+
 	// regionが未設定の場合は天候APIを呼ばずに生成する(docs/adr/012)。
 	// 「地域未設定」は入力エラーではなく想定内の状態であり、AI提案自体を
 	// ブロックする理由にはならないため、天候情報なしのまま続行する。
@@ -132,7 +153,9 @@ func (s *AdviceService) generate(ctx context.Context, userID string, goal *model
 		GoalType:      goal.GoalType,
 		TargetTimeSec: goal.TargetTimeSec,
 		TargetDate:    goal.TargetDate,
+		Today:         time.Now().In(jst),
 		RecentRuns:    recentRuns,
+		RecentMenus:   recentMenus,
 		Weather:       weather,
 	})
 	if err != nil {
