@@ -33,10 +33,14 @@ const (
 	MenuTypeInterval = "インターバル"
 	MenuTypeLong     = "ロング走"
 	MenuTypeRest     = "休養"
+	// MenuTypeBuildUp はペースを徐々に上げていく練習(docs/adr/022)。
+	// 単一のpace_sec_per_kmでは原理的に表現できない唯一の種別のため、
+	// Segments(区間ごとのペース)を使って表現する。
+	MenuTypeBuildUp = "ビルドアップ走"
 )
 
 // ValidMenuTypes はAI出力の検証・FE表示の両方から参照する順序付きの一覧。
-var ValidMenuTypes = []string{MenuTypeJog, MenuTypePace, MenuTypeInterval, MenuTypeLong, MenuTypeRest}
+var ValidMenuTypes = []string{MenuTypeJog, MenuTypePace, MenuTypeInterval, MenuTypeLong, MenuTypeRest, MenuTypeBuildUp}
 
 // IsValidMenuType はAIが指示通りの列挙値を返したかを確認する。
 // 想定外の値でもエラーにはせず(jsonbは値を制約しない、docs/database.md 5.)、
@@ -50,6 +54,16 @@ func IsValidMenuType(s string) bool {
 	return false
 }
 
+// MenuSegment は1回の練習内で区間ごとに条件が変わる練習(現時点ではビルドアップ走のみ)の
+// 区間1つ分(docs/adr/022)。インターバル・変化走・ウェーブ走にも再利用できるよう、
+// RepsとRestSecを持たせているが、ビルドアップ走では常にReps=1・RestSec=0で使う。
+type MenuSegment struct {
+	Reps         int     `json:"reps"`
+	DistanceKm   float64 `json:"distance_km"`
+	PaceSecPerKm float64 `json:"pace_sec_per_km"`
+	RestSec      float64 `json:"rest_sec"`
+}
+
 // NextMenu は次回練習メニュー(docs/database.md 3.4 next_menu)。
 // jsonb列に対応させるため、Scan/ValueでJSON⇔Goの相互変換を行う。
 type NextMenu struct {
@@ -57,6 +71,11 @@ type NextMenu struct {
 	DistanceKm   float64 `json:"distance_km"`
 	PaceSecPerKm float64 `json:"pace_sec_per_km"`
 	Note         string  `json:"note"`
+	// Segments は区間ごとの内訳(docs/adr/022)。現時点ではMenuTypeBuildUpの時のみ
+	// AIに出力させる。他の種別では省略され、jsonbとしてキー自体が無い状態になる
+	// (omitempty)。DistanceKm/PaceSecPerKmは従来通り「合計距離・代表ペース」を
+	// 表す値として残るため、Segmentsが無くても既存の表示は成立する。
+	Segments []MenuSegment `json:"segments,omitempty"`
 }
 
 func (n *NextMenu) Scan(value any) error {

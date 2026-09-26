@@ -144,13 +144,18 @@ func buildPrompt(in AdvicePromptInput) string {
     "menu_type": 次回練習の種別。上記「前回までに提案した練習メニュー」の表記に関わらず、必ず次のいずれか1つを完全一致で使うこと: %s,
     "distance_km": 次回練習の距離(数値、km)。menu_typeが"%s"の場合は0,
     "pace_sec_per_km": 次回練習の目標ペース(数値、秒/km)。menu_typeが"%s"の場合は0,
-    "note": "練習メニューの補足(日本語、1〜2文)"
+    "note": "練習メニューの補足(日本語、1〜2文)",
+    "segments": menu_typeが"%s"の場合のみ、2〜4個の区間を配列で出力する。各区間は
+      {"reps": 1, "distance_km": 区間の距離(数値), "pace_sec_per_km": 区間の目標ペース(数値), "rest_sec": 0}。
+      区間は距離が短い順・ペースが徐々に速くなる順に並べ、distance_kmの合計は上のdistance_kmと一致させること。
+      menu_typeが"%s"以外の場合はsegmentsキー自体を出力しないこと
   }
 }`,
 		today.Format("2006-01-02"),
 		in.GoalType, in.TargetTimeSec, in.TargetDate.Format("2006-01-02"), daysUntilRaceDesc,
 		runsDesc.String(), recentMenusDesc, weatherDesc, "```",
-		`"`+strings.Join(model.ValidMenuTypes, `", "`)+`"`, model.MenuTypeRest, model.MenuTypeRest)
+		`"`+strings.Join(model.ValidMenuTypes, `", "`)+`"`, model.MenuTypeRest, model.MenuTypeRest,
+		model.MenuTypeBuildUp, model.MenuTypeBuildUp)
 }
 
 const (
@@ -212,6 +217,8 @@ type adviceJSON struct {
 		DistanceKm   float64 `json:"distance_km"`
 		PaceSecPerKm float64 `json:"pace_sec_per_km"`
 		Note         string  `json:"note"`
+		// Segmentsはmenu_typeが"ビルドアップ走"の場合のみ入る想定(docs/adr/022)。
+		Segments []model.MenuSegment `json:"segments"`
 	} `json:"next_menu"`
 }
 
@@ -285,6 +292,7 @@ func (c *GeminiClient) GenerateAdvice(ctx context.Context, in AdvicePromptInput)
 			DistanceKm:   parsed.NextMenu.DistanceKm,
 			PaceSecPerKm: parsed.NextMenu.PaceSecPerKm,
 			Note:         parsed.NextMenu.Note,
+			Segments:     parsed.NextMenu.Segments,
 		},
 	}, nil
 }

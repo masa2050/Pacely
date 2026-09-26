@@ -544,6 +544,14 @@
   font-size: 13px;
 }
 
+/* ビルドアップ走の区間内訳(docs/adr/022)。note・weatherと同じ補足扱いの文字サイズ・色。 */
+.advice-view__segments {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  color: var(--text);
+  font-size: 13px;
+}
+
 .advice-view__generated-at {
   color: var(--text);
   font-size: 12px;
