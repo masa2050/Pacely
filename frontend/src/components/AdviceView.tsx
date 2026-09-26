@@ -119,10 +119,15 @@ function AdviceCard({ advice, onFeedbackSaved }: { advice: Advice; onFeedbackSav
       <div className="advice-view__menu">
         <p className="advice-view__menu-label">本日の練習メニュー</p>
         <div className="advice-view__stats">
-          <div className="advice-view__stat">
-            <span className="advice-view__stat-label">種別</span>
-            <span className="advice-view__stat-value">{menu_type || '不明'}</span>
-          </div>
+          {/* menu_typeが空なのは8-2②導入前に生成された提案(履歴に残っている)。
+              「不明」と表示するとエラーのように見えるが、実際には当時のスキーマに
+              種別が無かっただけなので、欄自体を出さず②導入前と同じ表示に戻す。 */}
+          {menu_type && (
+            <div className="advice-view__stat">
+              <span className="advice-view__stat-label">種別</span>
+              <span className="advice-view__stat-value">{menu_type}</span>
+            </div>
+          )}
           {!isRest && (
             <>
               <div className="advice-view__stat">
