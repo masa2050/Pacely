@@ -284,6 +284,29 @@ func (c *GeminiClient) GenerateAdvice(ctx context.Context, in AdvicePromptInput)
 	if !model.IsValidMenuType(parsed.NextMenu.MenuType) {
 		log.Printf("advice: gemini returned unexpected menu_type: %q", parsed.NextMenu.MenuType)
 	}
+	// segmentsもmenu_type同様、AIが指示(docs/adr/022)通りに返す保証はない。
+	// ビルドアップ走なのにsegmentsが無い/他の種別なのにsegmentsがある/距離の合計が
+	// distance_kmと合わない、のいずれも生成自体は止めずログにのみ残す。
+	switch {
+	case parsed.NextMenu.MenuType == model.MenuTypeBuildUp && len(parsed.NextMenu.Segments) == 0:
+		log.Printf("advice: gemini menu_type=%s but segments is empty", model.MenuTypeBuildUp)
+	case parsed.NextMenu.MenuType != model.MenuTypeBuildUp && len(parsed.NextMenu.Segments) > 0:
+		log.Printf("advice: gemini returned segments for non-buildup menu_type %q", parsed.NextMenu.MenuType)
+	}
+	if len(parsed.NextMenu.Segments) > 0 {
+		var sum float64
+		for _, seg := range parsed.NextMenu.Segments {
+			reps := seg.Reps
+			if reps < 1 {
+				reps = 1
+			}
+			sum += seg.DistanceKm * reps
+		}
+		if diff := sum - parsed.NextMenu.DistanceKm; diff > 1 || diff < -1 {
+			log.Printf("advice: gemini segments distance sum (%.1f) does not match distance_km (%.1f)",
+				sum, parsed.NextMenu.DistanceKm)
+		}
+	}
 
 	return AdviceGeneration{
 		AdviceText: parsed.AdviceText,

@@ -57,8 +57,11 @@ func IsValidMenuType(s string) bool {
 // MenuSegment は1回の練習内で区間ごとに条件が変わる練習(現時点ではビルドアップ走のみ)の
 // 区間1つ分(docs/adr/022)。インターバル・変化走・ウェーブ走にも再利用できるよう、
 // RepsとRestSecを持たせているが、ビルドアップ走では常にReps=1・RestSec=0で使う。
+// Repsは意味上は整数(本数)だが、AIの出力は他の数値フィールド同様1.0のような
+// 小数表記で返ってくる可能性があり、int型にすると1件のパース失敗が
+// アドバイス生成全体を失敗させてしまう(/code-review指摘)ためfloat64にしている。
 type MenuSegment struct {
-	Reps         int     `json:"reps"`
+	Reps         float64 `json:"reps"`
 	DistanceKm   float64 `json:"distance_km"`
 	PaceSecPerKm float64 `json:"pace_sec_per_km"`
 	RestSec      float64 `json:"rest_sec"`
