@@ -23,11 +23,12 @@ import { Sidebar } from './Sidebar'
 type Props = {
   session: Session
   onSettingsClick: () => void
+  onHistoryClick: () => void
 }
 
 // フェーズ1の完了条件確認用: ログイン後、JWTを使って GET/PUT /users/me が
 // 実際に動くことをUI上で見えるようにする最小限の画面。
-export function Dashboard({ session, onSettingsClick }: Props) {
+export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
   const [me, setMe] = useState<Me | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [runs, setRuns] = useState<Run[]>([])
@@ -58,7 +59,7 @@ export function Dashboard({ session, onSettingsClick }: Props) {
     <div className="dashboard">
       <header className="dashboard__header">
         <div className="dashboard__header-left">
-          <Sidebar onSettingsClick={onSettingsClick} />
+          <Sidebar onSettingsClick={onSettingsClick} onHistoryClick={onHistoryClick} />
           <h1>Pacely</h1>
         </div>
         <button type="button" onClick={() => supabase.auth.signOut()}>
@@ -149,7 +150,7 @@ export function Dashboard({ session, onSettingsClick }: Props) {
           {/* activeGoal・runsの変化に応じて再取得したいので、Progressと同様keyで再マウントする。
               ただし取得自体は「前回生成から24時間以内ならキャッシュを返す」ため、
               毎回AIが呼ばれるわけではない(docs/adr/004)。 */}
-          <AdviceView key={`${activeGoal?.id ?? 'none'}-${runs.length}`} />
+          <AdviceView key={`${activeGoal?.id ?? 'none'}-${runs.length}`} onHistoryClick={onHistoryClick} />
         </div>
       </div>
     </div>

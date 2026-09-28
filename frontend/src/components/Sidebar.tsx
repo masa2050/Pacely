@@ -2,6 +2,7 @@ import { useState } from 'react'
 
 type Props = {
   onSettingsClick: () => void
+  onHistoryClick: () => void
 }
 
 // フェーズ7-2: ナビゲーションメニュー。
@@ -10,8 +11,9 @@ type Props = {
 // SP/PC共通でハンバーガーボタン+ドロップダウンのシンプルな形に変更した(docs/adr/015)。
 // 「記録/目標/AI提案」はDashboard.tsx内の既存カードへのアンカースクロールとし、
 // 別画面に分割しない(Dashboard.tsxのカード構成・並び順は変えない方針)。
-// 「設定」だけは退会機能の移動先として新設した別画面のため、コールバックで画面遷移する。
-export function Sidebar({ onSettingsClick }: Props) {
+// 「設定」「提案履歴」は別画面のため、コールバックで画面遷移する
+// (提案履歴はフェーズ9-5で追加、docs/adr/020)。
+export function Sidebar({ onSettingsClick, onHistoryClick }: Props) {
   const [open, setOpen] = useState(false)
 
   function closeMenu() {
@@ -41,6 +43,16 @@ export function Sidebar({ onSettingsClick }: Props) {
           <a href="#dashboard-advice" className="sidebar__link" onClick={closeMenu}>
             AI提案
           </a>
+          <button
+            type="button"
+            className="sidebar__link sidebar__link--button"
+            onClick={() => {
+              closeMenu()
+              onHistoryClick()
+            }}
+          >
+            提案履歴
+          </button>
           <button
             type="button"
             className="sidebar__link sidebar__link--button"

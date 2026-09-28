@@ -591,8 +591,11 @@
    意味が直感的に伝わるアイコンボタンに変更した。
    「.dashboard button」(全ボタン共通の塗りつぶし紫背景)より詳細度を上げて
    ニュートラルな見た目に上書きしないと、未選択でも塗りつぶし紫のままになり
-   「押した状態」に見えてしまうため、.dashboardを含めた2クラス構成にしている。 */
-.dashboard .advice-feedback__button {
+   「押した状態」に見えてしまうため、.dashboardを含めた2クラス構成にしている。
+   フェーズ9-5で提案履歴の専用画面(.advice-history)にも同じカードを表示するように
+   なったため、そちらのセレクタも併記している(docs/adr/020)。 */
+.dashboard .advice-feedback__button,
+.advice-history .advice-feedback__button {
   width: 40px;
   height: 40px;
   padding: 0;
@@ -608,12 +611,14 @@
 
 /* 選択中の評価を色で示す。良い/悪いの意味が伝わるよう、共通のアクセント色ではなく
    グッド=緑・バッド=赤(既存のdashboard__card--dangerと同系色)に分ける。 */
-.dashboard .advice-feedback__button--good.advice-feedback__button--selected {
+.dashboard .advice-feedback__button--good.advice-feedback__button--selected,
+.advice-history .advice-feedback__button--good.advice-feedback__button--selected {
   background: rgba(48, 164, 108, 0.15);
   border-color: #30a46c;
 }
 
-.dashboard .advice-feedback__button--bad.advice-feedback__button--selected {
+.dashboard .advice-feedback__button--bad.advice-feedback__button--selected,
+.advice-history .advice-feedback__button--bad.advice-feedback__button--selected {
   background: rgba(229, 72, 77, 0.12);
   border-color: #e5484d;
 }
@@ -641,15 +646,6 @@
   margin: 0;
   font-size: 12px;
   color: var(--text);
-}
-
-.advice-view__history {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin: 0;
-  padding: 0;
 }
 
 .app__privacy-link {
@@ -735,6 +731,126 @@
 .settings__message {
   color: var(--text);
   font-size: 14px;
+}
+
+/* フェーズ9-5: AI提案履歴の専用画面(docs/adr/020)。
+   1件約570pxのカードを縦に積むのをやめ、1行約34pxのサマリー行にする。
+   行の高さはランニング記録の1行(run-list)と揃えてあり、
+   「何件あっても一望できる」という記録一覧と同じ読み方ができるようにしている。 */
+.advice-history {
+  width: 100%;
+  max-width: 640px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 戻るボタン・見出しは既存の別画面(設定・プライバシーポリシー)と同じ見た目に揃える。 */
+.advice-history__back {
+  align-self: flex-start;
+  font: inherit;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.advice-history h1 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.advice-history__lead {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.advice-history__error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.advice-history__error button {
+  font: inherit;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+}
+
+/* 一覧は枠線で囲み、行間は境界線1本だけで区切る(カードを並べるのではなく
+   「表」に見せるため)。角丸を効かせるためoverflow: hiddenを付ける。 */
+.advice-history__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.advice-history__item + .advice-history__item {
+  border-top: 1px solid var(--border);
+}
+
+/* 行全体がクリック可能なbutton。日付・メニュー・評価の3列はGridで揃える
+   (中央のメニュー列だけを可変にし、日付と評価は内容幅で固定)。 */
+.advice-history__row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  color: var(--text-h);
+  cursor: pointer;
+}
+
+.advice-history__row:hover,
+.advice-history__row--expanded {
+  background: var(--accent-bg);
+}
+
+.advice-history__date {
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* メニュー名が長い場合(種別+距離+ペース)でも行を折り返させない。
+   折り返すと1行の高さが崩れ、一望できるという一覧の利点が失われるため。 */
+.advice-history__menu {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advice-history__feedback {
+  white-space: nowrap;
+  color: var(--text);
+}
+
+.advice-history__detail {
+  padding: 0 12px 12px;
+}
+
+.advice-history__limit-note {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text);
 }
 
 @media (max-width: 400px) {
