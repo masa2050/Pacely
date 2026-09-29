@@ -59,7 +59,7 @@ export function AdviceView({ onHistoryClick }: Props) {
 
       <div className="advice-view__actions">
         <button type="button" onClick={fetchLatest}>
-          最新のAI提案を確認する(GET /advices/latest)
+          最新のAI提案を確認する
         </button>
         {/* カード内での開閉(showHistory)をやめ、専用画面への導線に変更した
             (docs/adr/020)。履歴は「振り返りたいときに開く情報」であり、

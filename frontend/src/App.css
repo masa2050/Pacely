@@ -77,7 +77,11 @@
   box-shadow: var(--shadow);
 }
 
-.sidebar__link {
+/* 「設定」「提案履歴」は<button>要素のため、.dashboard buttonのbutton{}が
+   .sidebar__link単体より詳細度が高く、素の状態が紫塗りつぶしになってしまい
+   ホバー時にだけ薄くなる(色が引く)見た目になっていた。.dashboardを前置して
+   詳細度を上げ、<a>の「記録」「目標」「AI提案」と同じ見た目に揃える。 */
+.dashboard .sidebar__link {
   font: inherit;
   text-align: left;
   padding: 8px 10px;
@@ -89,7 +93,7 @@
   cursor: pointer;
 }
 
-.sidebar__link:hover {
+.dashboard .sidebar__link:hover {
   background: var(--accent-bg);
 }
 
@@ -266,6 +270,20 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* フェーズ9-2: パスワード変更フォームを折りたたみにした際の「変更する」「閉じる」。
+   閉じる側は退会ボタンのような取り消せない操作ではないため、run-listの編集キャンセル
+   と同じくニュートラルな枠線ボタンにして「変更する」(塗りつぶし)と区別する。 */
+.settings__password-form-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.settings .settings__password-form-cancel {
+  background: transparent;
+  color: var(--text-h);
+  border: 1px solid var(--border);
 }
 
 .run-form,

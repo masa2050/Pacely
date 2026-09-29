@@ -88,16 +88,15 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
       <div className="dashboard__column dashboard__column--left">
         {me ? (
           <div className="dashboard__card">
-            <h2>プロフィール(GET /users/me)</h2>
+            <h2>プロフィール</h2>
+            {/* user id・created_atはユーザーにとって意味のない情報のため非表示にした
+                (docs/implementation-plan.md 9-1)。ユーザーネームは挨拶文にも出ているが、
+                このカードでは編集への導線(設定画面)として値そのものを表示しておく。 */}
             <dl>
-              <dt>user id</dt>
-              <dd>{me.id}</dd>
               <dt>username</dt>
               <dd>{me.username ?? '(未設定)'}</dd>
               <dt>region</dt>
               <dd>{me.region ?? '(未設定)'}</dd>
-              <dt>created_at</dt>
-              <dd>{me.created_at}</dd>
             </dl>
             {/* 地域の編集・退会は設定画面に一本化した(フェーズ7-2, Settings.tsx)。
                 ここは表示専用のカードとして残す。 */}
@@ -146,7 +145,7 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
 
       <div className="dashboard__column dashboard__column--right">
         <div id="dashboard-advice" className="dashboard__card">
-          <h2>AI提案(GET /advices/latest)</h2>
+          <h2>AI提案</h2>
           {/* activeGoal・runsの変化に応じて再取得したいので、Progressと同様keyで再マウントする。
               ただし取得自体は「前回生成から24時間以内ならキャッシュを返す」ため、
               毎回AIが呼ばれるわけではない(docs/adr/004)。 */}
