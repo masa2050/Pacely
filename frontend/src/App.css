@@ -178,8 +178,15 @@
   color: var(--text-h);
 }
 
+/* Settings.tsx はADR-015で専用画面として分離した際、.dashboardの外側に
+   独立した.settingsルートを持つ構成になった。そのため.dashboard buttonの
+   紫ボタンスタイルが及ばず、保存・パスワード変更ボタンがブラウザ標準の
+   見た目のまま、退会ボタンだけ.dashboard__card--dangerで背景色のみ
+   当たってレイアウト(パディング・角丸)が揃っていなかった。.settingsも
+   対象に加えて統一する。 */
 .auth-form button,
-.dashboard button {
+.dashboard button,
+.settings button {
   font: inherit;
   padding: 8px 12px;
   border-radius: 6px;
@@ -190,6 +197,7 @@
 }
 
 .auth-form button:disabled,
+.settings button:disabled,
 .dashboard button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
@@ -735,7 +743,10 @@
   gap: 12px;
 }
 
-.settings__back {
+/* .settings buttonの紫塗りつぶしより詳細度を上げて、戻るボタンは
+   他画面(プライバシーポリシー等)と同じニュートラルな枠線スタイルを保つ。
+   「戻る」は主要操作ではないため、紫の強調色で目立たせる対象から外している。 */
+.settings .settings__back {
   align-self: flex-start;
   font: inherit;
   padding: 6px 10px;

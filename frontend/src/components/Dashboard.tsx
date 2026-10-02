@@ -91,11 +91,12 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
             <h2>プロフィール</h2>
             {/* user id・created_atはユーザーにとって意味のない情報のため非表示にした
                 (docs/implementation-plan.md 9-1)。ユーザーネームは挨拶文にも出ているが、
-                このカードでは編集への導線(設定画面)として値そのものを表示しておく。 */}
+                このカードでは編集への導線(設定画面)として値そのものを表示しておく。
+                dtラベルはDBカラム名(username/region)の生表記をやめ、日本語に統一した。 */}
             <dl>
-              <dt>username</dt>
+              <dt>ユーザーネーム</dt>
               <dd>{me.username ?? '(未設定)'}</dd>
-              <dt>region</dt>
+              <dt>地域</dt>
               <dd>{me.region ?? '(未設定)'}</dd>
             </dl>
             {/* 地域の編集・退会は設定画面に一本化した(フェーズ7-2, Settings.tsx)。
