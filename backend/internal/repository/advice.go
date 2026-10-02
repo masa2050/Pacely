@@ -68,10 +68,14 @@ func scanAdvices(rows pgx.Rows) ([]model.Advice, error) {
 	return advices, rows.Err()
 }
 
-// ListByUser はuser_idで絞り込んだ提案履歴を新しい順に返す(GET /advices)。
-func (r *AdviceRepository) ListByUser(ctx context.Context, userID string) ([]model.Advice, error) {
+// ListByUser はuser_idで絞り込んだ提案履歴を新しい順にlimit件返す(GET /advices)。
+// 提案は1日1件生成されるため履歴は増え続ける。上限が無いと1年で365件・本文付きを
+// 毎回返すことになるため、直近分のみに絞る(docs/adr/020)。上限値そのものは
+// 「どこまで遡れれば足りるか」というビジネス上の判断なのでservice層に置き、
+// repositoryは受け取った値をそのまま使う。
+func (r *AdviceRepository) ListByUser(ctx context.Context, userID string, limit int) ([]model.Advice, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+adviceColumns+` FROM advices WHERE user_id = $1 ORDER BY generated_at DESC`, userID)
+		`SELECT `+adviceColumns+` FROM advices WHERE user_id = $1 ORDER BY generated_at DESC LIMIT $2`, userID, limit)
 	if err != nil {
 		return nil, err
 	}

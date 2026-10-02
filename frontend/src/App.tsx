@@ -3,6 +3,7 @@ import { useSession } from './hooks/useSession'
 import { AuthForm } from './components/AuthForm'
 import { Dashboard } from './components/Dashboard'
 import { Settings } from './components/Settings'
+import { AdviceHistory } from './components/AdviceHistory'
 import { ResetPasswordForm } from './components/ResetPasswordForm'
 import { PrivacyPolicy } from './components/PrivacyPolicy'
 import './App.css'
@@ -15,6 +16,10 @@ function App() {
   // 設定画面も同様に、react-router-domを新規導入せず既存の画面切り替えパターンを踏襲する
   // (フェーズ7-2、docs/adr/015参照)。
   const [showSettings, setShowSettings] = useState(false)
+  // AI提案の履歴も同じパターンで専用画面にする(フェーズ9-5、docs/adr/020)。
+  // ダッシュボードのカード内で開閉していた頃は、件数が増えるほどダッシュボードが
+  // 下へ伸びていた。画面を分ければページ全体が縦に伸びるのは自然な挙動になる。
+  const [showAdviceHistory, setShowAdviceHistory] = useState(false)
 
   // 設定画面からの退会(Settings.tsx)はsupabase.auth.signOut()でsessionをnullにするが、
   // showSettingsはApp.tsxのローカルstateなので自動では戻らない。session側でリセットし、
@@ -22,6 +27,7 @@ function App() {
   useEffect(() => {
     if (!session) {
       setShowSettings(false)
+      setShowAdviceHistory(false)
     }
   }, [session])
 
@@ -55,10 +61,22 @@ function App() {
     )
   }
 
+  if (showAdviceHistory && session) {
+    return (
+      <div id="center">
+        <AdviceHistory onBack={() => setShowAdviceHistory(false)} />
+      </div>
+    )
+  }
+
   return (
     <div id="center">
       {session ? (
-        <Dashboard session={session} onSettingsClick={() => setShowSettings(true)} />
+        <Dashboard
+          session={session}
+          onSettingsClick={() => setShowSettings(true)}
+          onHistoryClick={() => setShowAdviceHistory(true)}
+        />
       ) : (
         <AuthForm />
       )}

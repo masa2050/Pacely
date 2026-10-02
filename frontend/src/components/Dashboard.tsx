@@ -23,11 +23,12 @@ import { Sidebar } from './Sidebar'
 type Props = {
   session: Session
   onSettingsClick: () => void
+  onHistoryClick: () => void
 }
 
 // フェーズ1の完了条件確認用: ログイン後、JWTを使って GET/PUT /users/me が
 // 実際に動くことをUI上で見えるようにする最小限の画面。
-export function Dashboard({ session, onSettingsClick }: Props) {
+export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
   const [me, setMe] = useState<Me | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [runs, setRuns] = useState<Run[]>([])
@@ -58,7 +59,7 @@ export function Dashboard({ session, onSettingsClick }: Props) {
     <div className="dashboard">
       <header className="dashboard__header">
         <div className="dashboard__header-left">
-          <Sidebar onSettingsClick={onSettingsClick} />
+          <Sidebar onSettingsClick={onSettingsClick} onHistoryClick={onHistoryClick} />
           <h1>Pacely</h1>
         </div>
         <button type="button" onClick={() => supabase.auth.signOut()}>
@@ -87,16 +88,16 @@ export function Dashboard({ session, onSettingsClick }: Props) {
       <div className="dashboard__column dashboard__column--left">
         {me ? (
           <div className="dashboard__card">
-            <h2>プロフィール(GET /users/me)</h2>
+            <h2>プロフィール</h2>
+            {/* user id・created_atはユーザーにとって意味のない情報のため非表示にした
+                (docs/implementation-plan.md 9-1)。ユーザーネームは挨拶文にも出ているが、
+                このカードでは編集への導線(設定画面)として値そのものを表示しておく。
+                dtラベルはDBカラム名(username/region)の生表記をやめ、日本語に統一した。 */}
             <dl>
-              <dt>user id</dt>
-              <dd>{me.id}</dd>
-              <dt>username</dt>
+              <dt>ユーザーネーム</dt>
               <dd>{me.username ?? '(未設定)'}</dd>
-              <dt>region</dt>
+              <dt>地域</dt>
               <dd>{me.region ?? '(未設定)'}</dd>
-              <dt>created_at</dt>
-              <dd>{me.created_at}</dd>
             </dl>
             {/* 地域の編集・退会は設定画面に一本化した(フェーズ7-2, Settings.tsx)。
                 ここは表示専用のカードとして残す。 */}
@@ -145,11 +146,11 @@ export function Dashboard({ session, onSettingsClick }: Props) {
 
       <div className="dashboard__column dashboard__column--right">
         <div id="dashboard-advice" className="dashboard__card">
-          <h2>AI提案(GET /advices/latest)</h2>
+          <h2>AI提案</h2>
           {/* activeGoal・runsの変化に応じて再取得したいので、Progressと同様keyで再マウントする。
               ただし取得自体は「前回生成から24時間以内ならキャッシュを返す」ため、
               毎回AIが呼ばれるわけではない(docs/adr/004)。 */}
-          <AdviceView key={`${activeGoal?.id ?? 'none'}-${runs.length}`} />
+          <AdviceView key={`${activeGoal?.id ?? 'none'}-${runs.length}`} onHistoryClick={onHistoryClick} />
         </div>
       </div>
     </div>

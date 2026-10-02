@@ -31,6 +31,13 @@ const recentRunsForAdvicePrompt = recentRunsForProgress
 // 件数を増やすほどプロンプトが長くなるため、まずは最小限から始める。
 const recentAdvicesForPrompt = 3
 
+// maxAdviceHistory は GET /advices が返す提案履歴の件数上限(docs/adr/020)。
+// 履歴画面は「直近の傾向を振り返る」ための画面であり、それ以上遡る必要が出た
+// 時点でページングを検討する。一覧に必要なのは日付・メニュー・評価だけだが、
+// 本文を除いた一覧専用レスポンスを別に作るのはMVPに対して過剰なため、
+// 既存エンドポイントに件数上限を付けるに留める。
+const maxAdviceHistory = 50
+
 // jst はプロンプトに渡す「今日の日付」(8-2③)をJST基準で計算するために使う
 // (/code-review指摘)。本番はRailwayのalpine系イメージ(tzdata未導入)で動くため
 // time.LoadLocation("Asia/Tokyo")は失敗しうる。日本はDSTが無く常にUTC+9固定のため、
@@ -174,7 +181,7 @@ func (s *AdviceService) generate(ctx context.Context, userID string, goal *model
 
 // List は GET /advices(過去の提案履歴一覧)。
 func (s *AdviceService) List(ctx context.Context, userID string) ([]model.Advice, error) {
-	return s.repo.ListByUser(ctx, userID)
+	return s.repo.ListByUser(ctx, userID, maxAdviceHistory)
 }
 
 // maxFeedbackCommentLen はフィードバックコメントの最大文字数。
