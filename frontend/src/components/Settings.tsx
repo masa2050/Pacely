@@ -30,6 +30,19 @@ export function Settings({ session, onBack }: Props) {
   const [passwordError, setPasswordError] = useState<string | null>(null)
   const [passwordMessage, setPasswordMessage] = useState<string | null>(null)
   const [changingPassword, setChangingPassword] = useState(false)
+  // フォームを常時展開せず、変更の意志がある人だけがボタンで開く折りたたみにする
+  // (フェーズ9-2、docs/implementation-plan.md)。入力途中のパスワードを画面に
+  // 残したままにしないよう、閉じる際は入力値もリセットする。
+  const [showPasswordForm, setShowPasswordForm] = useState(false)
+
+  function closePasswordForm() {
+    setShowPasswordForm(false)
+    setCurrentPassword('')
+    setNewPassword('')
+    setConfirmNewPassword('')
+    setPasswordError(null)
+    setPasswordMessage(null)
+  }
 
   useEffect(() => {
     getMe()
@@ -129,11 +142,8 @@ export function Settings({ session, onBack }: Props) {
         <h2>プロフィール</h2>
         {me ? (
           <>
-            <dl>
-              <dt>user id</dt>
-              <dd>{me.id}</dd>
-            </dl>
-
+            {/* user idはユーザーにとって意味のない情報のため非表示にした
+                (docs/implementation-plan.md 9-1、Dashboard.tsxのプロフィールカードと統一)。 */}
             <div className="dashboard__region-form">
               <label>
                 ユーザーネーム(表示名)
@@ -161,7 +171,7 @@ export function Settings({ session, onBack }: Props) {
                 </select>
               </label>
               <button type="button" onClick={handleSaveProfile} disabled={saving}>
-                {saving ? '保存中...' : '保存(PUT /users/me)'}
+                {saving ? '保存中...' : '保存'}
               </button>
             </div>
           </>
@@ -172,54 +182,65 @@ export function Settings({ session, onBack }: Props) {
 
       <div className="dashboard__card">
         <h2>パスワード変更</h2>
-        <form className="settings__password-form" onSubmit={handleChangePassword}>
-          <label>
-            現在のパスワード
-            <input
-              type="password"
-              required
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-            />
-          </label>
-          <label>
-            新しいパスワード
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-          </label>
-          <label>
-            新しいパスワード(確認)
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={confirmNewPassword}
-              onChange={(e) => setConfirmNewPassword(e.target.value)}
-              autoComplete="new-password"
-            />
-          </label>
-
-          {passwordError && <p className="dashboard__error">{passwordError}</p>}
-          {passwordMessage && <p className="settings__message">{passwordMessage}</p>}
-
-          <button type="submit" disabled={changingPassword}>
-            {changingPassword ? '変更中...' : 'パスワードを変更する'}
+        {!showPasswordForm ? (
+          <button type="button" onClick={() => setShowPasswordForm(true)}>
+            パスワードを変更する
           </button>
-        </form>
+        ) : (
+          <form className="settings__password-form" onSubmit={handleChangePassword}>
+            <label>
+              現在のパスワード
+              <input
+                type="password"
+                required
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                autoComplete="current-password"
+              />
+            </label>
+            <label>
+              新しいパスワード
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </label>
+            <label>
+              新しいパスワード(確認)
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={confirmNewPassword}
+                onChange={(e) => setConfirmNewPassword(e.target.value)}
+                autoComplete="new-password"
+              />
+            </label>
+
+            {passwordError && <p className="dashboard__error">{passwordError}</p>}
+            {passwordMessage && <p className="settings__message">{passwordMessage}</p>}
+
+            <div className="settings__password-form-actions">
+              <button type="submit" disabled={changingPassword}>
+                {changingPassword ? '変更中...' : '変更する'}
+              </button>
+              <button type="button" className="settings__password-form-cancel" onClick={closePasswordForm} disabled={changingPassword}>
+                閉じる
+              </button>
+            </div>
+          </form>
+        )}
       </div>
 
       <div className="dashboard__card dashboard__card--danger">
         <h2>退会</h2>
         <p>退会すると、記録・目標・AI提案の履歴を含むすべてのデータが削除され、元に戻せません。</p>
         <button type="button" onClick={handleDeleteAccount} disabled={deleting}>
-          {deleting ? '処理中...' : '退会する(DELETE /users/me)'}
+          {deleting ? '処理中...' : '退会する'}
         </button>
       </div>
     </div>
