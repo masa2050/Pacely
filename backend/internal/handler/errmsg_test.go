@@ -57,3 +57,35 @@ func TestHTTPErrorHandler(t *testing.T) {
 		}
 	}
 }
+
+// echo.ErrNotFoundなどのグローバル変数は全リクエストで共有されるため、
+// 日本語化のためにその場で書き換えていないこと(データ競合の防止)を確認する。
+func TestHTTPErrorHandlerDoesNotMutateEchoGlobals(t *testing.T) {
+	e := echo.New()
+	e.HTTPErrorHandler = HTTPErrorHandler
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/nothing", nil))
+
+	if echo.ErrNotFound.Message != http.StatusText(http.StatusNotFound) {
+		t.Errorf("echo.ErrNotFound.Message が書き換わっている: %v", echo.ErrNotFound.Message)
+	}
+	if !strings.Contains(rec.Body.String(), "リクエスト先が見つかりません") {
+		t.Errorf("レスポンスは日本語になっていない: %s", rec.Body.String())
+	}
+}
+
+// InternalにHTTPErrorを持つエラーは、Echoの標準ハンドラが内側を返却対象にするため、
+// 内側の英語messageも日本語化されることを確認する。
+func TestHTTPErrorHandlerLocalizesInternalHTTPError(t *testing.T) {
+	e := echo.New()
+	e.HTTPErrorHandler = HTTPErrorHandler
+	e.GET("/wrapped", func(c echo.Context) error {
+		return echo.NewHTTPError(http.StatusInternalServerError, "x").SetInternal(echo.ErrNotFound)
+	})
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/wrapped", nil))
+
+	if strings.Contains(rec.Body.String(), "Not Found") {
+		t.Errorf("英語のmessageが残っている: %s", rec.Body.String())
+	}
+}

@@ -2,7 +2,6 @@ package handler
 
 import (
 	"errors"
-	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -40,8 +39,7 @@ func adviceToError(err error) error {
 	default:
 		// DB等の内部エラーの文面(接続先やSQLの断片を含みうる)は画面に出さず、
 		// サーバーログにのみ残す(フェーズ9-1。8-1の外部APIエラーと同じ方針)。
-		log.Printf("advice: unexpected error: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "AI提案の取得に失敗しました。しばらくしてから再度お試しください")
+		return internalError("advice", err, "AI提案の取得に失敗しました。しばらくしてから再度お試しください")
 	}
 }
 

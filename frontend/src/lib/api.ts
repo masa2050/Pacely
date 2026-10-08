@@ -13,6 +13,11 @@ export type Me = {
 
 type ApiErrorBody = { message?: string }
 
+// fetch自体が失敗した(オフライン・サーバー停止・CORS等)ことを表すエラー。
+// TypeErrorは通信失敗以外のプログラムのバグでも投げられるため、toUserMessageで
+// 一括でTypeErrorを通信エラー扱いにせず、fetchを呼ぶこの場所で明示的に変換する。
+export class NetworkError extends Error {}
+
 // ステータスコードを保持するエラー。GET /goals/active の404(有効な目標なし)のように、
 // エラーの種類によって呼び出し側で分岐したい場合に使う。
 export class ApiError extends Error {
@@ -33,14 +38,19 @@ async function authorizedFetch<T>(path: string, init?: RequestInit): Promise<T> 
     throw new ApiError(401, 'ログインしていません。もう一度ログインしてください')
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...(init?.headers ?? {}),
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+  } catch (err) {
+    throw new NetworkError('network request failed', { cause: err })
+  }
 
   if (!res.ok) {
     const body: ApiErrorBody = await res.json().catch(() => ({}))

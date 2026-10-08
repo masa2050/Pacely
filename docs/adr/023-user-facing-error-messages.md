@@ -69,6 +69,18 @@
 - FEの`toUserMessage`にSupabase Authの5xxとcode(`validation_failed`/`otp_expired`)を追加し、
   `ApiError`のmessageは「空でない文字列」のときだけ採用する
 
+### 2回目の/code-review後
+- `HTTPErrorHandler`は`echo.ErrNotFound`等のグローバル変数(全リクエストで共有)を直接書き換えると
+  データ競合になるため、コピーに対して文言を差し替える。`Committed`済みなら何もせず、
+  `Internal`が`*HTTPError`の場合は標準ハンドラと同様に内側を対象にする
+- `GoalInput.validate()`が空文字しか弾かず未知の`goal_type`を保存できてしまうのが根本原因だったため、
+  `goalTypeDistanceKm`にある種類のみ許可するよう修正した(`GetProgress`の500+ログは防御として残す)
+- 通信エラーの判定を「TypeError一般」から、`authorizedFetch`が`fetch`失敗を変換する`NetworkError`に変更した
+  (TypeErrorは通信以外のバグでも投げられ、原因を隠すため)
+- 各`*ToError`のdefault分岐のログ出力を`internalError`ヘルパーに集約し、書き忘れを防ぐ
+- 見送り: `ErrInvalidInput`を型付きエラーにする案。sentinel文言の後ろにそのまま返す前提は
+  `invalidInputMessage`のコメントに明記し、現時点では全箇所が日本語のみで組み立てているため
+
 ## 受容したリスク
 - 重複メールを「既に登録済み」と表示するため、登録フォームからメールアドレスの登録有無が推測できる
   (Supabaseが`identities: []`のダミー成功を返すのはまさにこれを防ぐため)。9-2の仕様として、

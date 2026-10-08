@@ -1,5 +1,5 @@
 import { isAuthError } from '@supabase/supabase-js'
-import { ApiError } from './api'
+import { ApiError, NetworkError } from './api'
 
 // フェーズ9-1: 画面に出すエラー文を日本語に統一するための変換。
 // 以前は各コンポーネントが err.message をそのまま表示していたため、
@@ -44,8 +44,9 @@ export function toUserMessage(err: unknown): string {
     return (err.code && AUTH_ERROR_MESSAGES[err.code]) || GENERIC_MESSAGE
   }
 
-  // fetchがネットワーク断で投げるのはTypeError("Failed to fetch")。
-  if (err instanceof TypeError) return NETWORK_MESSAGE
+  // api.tsのauthorizedFetchがfetch失敗をNetworkErrorに変換している。TypeError一般は
+  // 通信失敗以外のバグでも起きるため、ここでは通信エラー扱いにしない。
+  if (err instanceof NetworkError) return NETWORK_MESSAGE
 
   return GENERIC_MESSAGE
 }

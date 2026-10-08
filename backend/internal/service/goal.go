@@ -58,7 +58,9 @@ type GoalInput struct {
 }
 
 func (in GoalInput) validate() error {
-	if in.GoalType == "" {
+	// 空文字だけでなく未知の種類も弾く。保存を許すと、そのgoalがactiveの間は
+	// GET /goals/active/progressが毎回失敗し、ユーザーが画面から直せなくなるため。
+	if _, ok := goalTypeDistanceKm[in.GoalType]; !ok {
 		return fmt.Errorf("%w: 目標の種類を選択してください", ErrInvalidInput)
 	}
 	if in.TargetTimeSec <= 0 {

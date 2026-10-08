@@ -2,7 +2,6 @@
 package handler
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -32,8 +31,7 @@ func (h *UserHandler) GetMe(c echo.Context) error {
 
 	user, err := h.service.GetOrCreateMeWithUsername(c.Request().Context(), userID, username)
 	if err != nil {
-		log.Printf("user: get me failed: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "プロフィールの取得に失敗しました")
+		return internalError("user", err, "プロフィールの取得に失敗しました")
 	}
 	return c.JSON(http.StatusOK, user)
 }
@@ -61,8 +59,7 @@ func (h *UserHandler) UpdateMe(c echo.Context) error {
 
 	user, err := h.service.UpdateProfile(c.Request().Context(), userID, body.Region, body.Username)
 	if err != nil {
-		log.Printf("user: update me failed: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "プロフィールの更新に失敗しました")
+		return internalError("user", err, "プロフィールの更新に失敗しました")
 	}
 	return c.JSON(http.StatusOK, user)
 }
@@ -86,8 +83,7 @@ func (h *UserHandler) ChangePassword(c echo.Context) error {
 	}
 
 	if err := h.service.UpdatePassword(c.Request().Context(), userID, body.NewPassword); err != nil {
-		log.Printf("user: change password failed: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "パスワードの更新に失敗しました")
+		return internalError("user", err, "パスワードの更新に失敗しました")
 	}
 	return c.NoContent(http.StatusNoContent)
 }
@@ -98,8 +94,7 @@ func (h *UserHandler) DeleteMe(c echo.Context) error {
 	userID, _ := c.Get(appmw.ContextUserIDKey).(string)
 
 	if err := h.service.DeleteAccount(c.Request().Context(), userID); err != nil {
-		log.Printf("user: delete me failed: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "退会処理に失敗しました")
+		return internalError("user", err, "退会処理に失敗しました")
 	}
 	return c.NoContent(http.StatusNoContent)
 }

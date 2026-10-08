@@ -48,19 +48,41 @@ func localizedStatusMessage(code int) string {
 	return "リクエストを処理できませんでした"
 }
 
+// internalError は予期しないエラーを、詳細をサーバーログにだけ残して定型文の500にする。
+// 各*ToErrorのdefault分岐で同じ処理を書き写すと、新しいハンドラで書き忘れて原因不明の500に
+// なりうるため一箇所にまとめている(8-1・9-1共通の「詳細はログのみ」方針)。
+func internalError(tag string, err error, userMessage string) error {
+	log.Printf("%s: unexpected error: %v", tag, err)
+	return echo.NewHTTPError(http.StatusInternalServerError, userMessage)
+}
+
 // HTTPErrorHandler はEchoの標準エラーハンドラの前段で、エラーレスポンスのmessageを
 // ユーザーに見せてよい日本語に揃える(docs/api.md 4.、docs/adr/023)。
 // 各ハンドラが返す日本語のmessageはそのまま通し、次の2つだけを置き換える:
 //   - Echoが自動生成する英語の定型文(未定義のルート、Recoverミドルウェアが捕まえたpanic等)
 //   - echo.HTTPError以外の素のエラー(詳細はログにのみ残す)
 func HTTPErrorHandler(err error, c echo.Context) {
+	// 既にレスポンスを書き始めている場合はEchoの標準ハンドラと同じく何もしない。
+	if c.Response().Committed {
+		return
+	}
+
 	var he *echo.HTTPError
 	if !errors.As(err, &he) {
 		log.Printf("unhandled error: %v", err)
 		he = echo.NewHTTPError(http.StatusInternalServerError)
 	}
+	// Echoの標準ハンドラは、Internalが*HTTPErrorならそちらを実際の返却対象にする。
+	// 置換対象を取り違えないよう、こちらでも先に同じ展開をしてから文言を判定する。
+	if inner, ok := he.Internal.(*echo.HTTPError); ok {
+		he = inner
+	}
 	if msg, ok := he.Message.(string); ok && msg == http.StatusText(he.Code) {
-		he.Message = localizedStatusMessage(he.Code)
+		// echo.ErrNotFoundなどEchoのグローバル変数は全リクエストで共有されるため、
+		// 直接書き換えるとデータ競合になる。コピーに対して差し替える。
+		localized := *he
+		localized.Message = localizedStatusMessage(he.Code)
+		he = &localized
 	}
 	c.Echo().DefaultHTTPErrorHandler(he, c)
 }
