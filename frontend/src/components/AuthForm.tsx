@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
+import { DUPLICATE_EMAIL_MESSAGE, toUserMessage } from '../lib/errors'
 
 type Mode = 'login' | 'signup' | 'reset-request'
 
@@ -29,7 +30,7 @@ export function AuthForm() {
       })
       setSubmitting(false)
       if (error) {
-        setMessage(error.message)
+        setMessage(toUserMessage(error))
         return
       }
       setMessage('パスワード再設定用のメールを送信しました。メール内のリンクから新しいパスワードを設定してください。')
@@ -42,7 +43,7 @@ export function AuthForm() {
     // (docs/adr/017)。"Confirm email" が有効な本番環境でも、確認前のsignUp時点で
     // Supabase Auth側に保存されるため、確認メールのリンクを踏んで実際にログインするまで
     // 時間が空いても値は失われない。
-    const { error } =
+    const { data, error } =
       mode === 'login'
         ? await supabase.auth.signInWithPassword({ email, password })
         : await supabase.auth.signUp({ email, password, options: { data: { username } } })
@@ -50,11 +51,27 @@ export function AuthForm() {
     setSubmitting(false)
 
     if (error) {
-      setMessage(error.message)
+      // "Confirm email" が無効な環境では、登録済みメールでのsignUpは
+      // user_already_exists(422)のエラーで返る。toUserMessageが重複登録用の文言に変換する。
+      setMessage(toUserMessage(error))
       return
     }
     if (mode === 'signup') {
-      setMessage('登録しました。そのままログインできます。')
+      // "Confirm email" が有効な環境では、ユーザー列挙攻撃を防ぐためSupabase Authは
+      // 登録済みメールでもエラーを返さず、identitiesが空配列のダミーのユーザーを成功として返す。
+      // error有無だけで判定すると「登録しました」と誤表示してしまうため、ここで区別する
+      // (docs/implementation-plan.md 9-2)。なお既存の重複アカウントの統合・削除は対象外。
+      if (data.user?.identities?.length === 0) {
+        setMessage(DUPLICATE_EMAIL_MESSAGE)
+        return
+      }
+      // セッションがある = 確認メール不要の環境でそのままログインできている。
+      // 無い場合は確認メールのリンクを開くまでログインできないため文言を分ける。
+      setMessage(
+        data.session
+          ? '登録しました。そのままログインできます。'
+          : '確認メールを送信しました。メール内のリンクを開いて登録を完了してください。',
+      )
     }
     // ログイン成功時は onAuthStateChange 経由で useSession が自動的に更新される。
   }

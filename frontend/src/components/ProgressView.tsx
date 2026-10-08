@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getActiveGoalProgress, type Progress } from '../lib/api'
 import { GOAL_TYPES } from './GoalForm'
+import { toUserMessage } from '../lib/errors'
 
 const GOAL_TYPE_LABELS: Record<string, string> = Object.fromEntries(GOAL_TYPES.map((t) => [t.value, t.label]))
 
@@ -28,7 +29,7 @@ export function ProgressView() {
   useEffect(() => {
     getActiveGoalProgress()
       .then(setProgress)
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(toUserMessage(err)))
       .finally(() => setLoading(false))
   }, [])
 

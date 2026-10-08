@@ -58,14 +58,16 @@ type GoalInput struct {
 }
 
 func (in GoalInput) validate() error {
-	if in.GoalType == "" {
-		return fmt.Errorf("%w: goal_type は必須です", ErrInvalidInput)
+	// 空文字だけでなく未知の種類も弾く。保存を許すと、そのgoalがactiveの間は
+	// GET /goals/active/progressが毎回失敗し、ユーザーが画面から直せなくなるため。
+	if _, ok := goalTypeDistanceKm[in.GoalType]; !ok {
+		return fmt.Errorf("%w: 目標の種類を選択してください", ErrInvalidInput)
 	}
 	if in.TargetTimeSec <= 0 {
-		return fmt.Errorf("%w: target_time_sec は正の整数で指定してください", ErrInvalidInput)
+		return fmt.Errorf("%w: 目標タイムは1秒以上で入力してください", ErrInvalidInput)
 	}
 	if in.TargetDate.IsZero() {
-		return fmt.Errorf("%w: target_date は必須です", ErrInvalidInput)
+		return fmt.Errorf("%w: 目標日を入力してください", ErrInvalidInput)
 	}
 	return nil
 }
@@ -133,7 +135,9 @@ func (s *GoalService) GetProgress(ctx context.Context, userID string) (*Progress
 
 	distanceKm, ok := goalTypeDistanceKm[goal.GoalType]
 	if !ok {
-		return nil, fmt.Errorf("%w: 未知のgoal_typeです: %s", ErrInvalidInput, goal.GoalType)
+		// 保存済みの目標のgoal_typeが対応表に無い = データの不整合でありユーザー入力の誤りではない。
+		// 400ではなく通常のエラー(handlerで500+ログ)にし、原因調査用にgoal_typeを残す。
+		return nil, fmt.Errorf("保存済みの目標に未対応のgoal_typeがあります: %q", goal.GoalType)
 	}
 	targetPace := float64(goal.TargetTimeSec) / distanceKm
 
@@ -162,7 +166,7 @@ func (s *GoalService) GetProgress(ctx context.Context, userID string) (*Progress
 
 func (s *GoalService) UpdateStatus(ctx context.Context, userID, id, status string) (*model.Goal, error) {
 	if !updatableGoalStatuses[status] {
-		return nil, fmt.Errorf("%w: status は achieved または abandoned を指定してください", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: 目標の状態は「達成」または「中止」を指定してください", ErrInvalidInput)
 	}
 
 	existing, err := s.repo.GetByID(ctx, id)

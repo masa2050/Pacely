@@ -13,6 +13,11 @@ export type Me = {
 
 type ApiErrorBody = { message?: string }
 
+// fetch自体が失敗した(オフライン・サーバー停止・CORS等)ことを表すエラー。
+// TypeErrorは通信失敗以外のプログラムのバグでも投げられるため、toUserMessageで
+// 一括でTypeErrorを通信エラー扱いにせず、fetchを呼ぶこの場所で明示的に変換する。
+export class NetworkError extends Error {}
+
 // ステータスコードを保持するエラー。GET /goals/active の404(有効な目標なし)のように、
 // エラーの種類によって呼び出し側で分岐したい場合に使う。
 export class ApiError extends Error {
@@ -29,21 +34,29 @@ async function authorizedFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   if (!token) {
-    throw new Error('ログインしていません')
+    // toUserMessage(lib/errors.ts)が日本語のままメッセージを通せるようApiErrorにしている。
+    throw new ApiError(401, 'ログインしていません。もう一度ログインしてください')
   }
 
-  const res = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      ...(init?.headers ?? {}),
-      Authorization: `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-  })
+  let res: Response
+  try {
+    res = await fetch(`${API_BASE_URL}${path}`, {
+      ...init,
+      headers: {
+        ...(init?.headers ?? {}),
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    })
+  } catch (err) {
+    throw new NetworkError('network request failed', { cause: err })
+  }
 
   if (!res.ok) {
     const body: ApiErrorBody = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, body.message ?? `APIエラー(status ${res.status})`)
+    // messageが文字列でない・空の場合(想定外のプロキシ応答等)は画面に空文や[object Object]が出ないよう定型文にする。
+    const message = typeof body.message === 'string' && body.message !== '' ? body.message : `APIエラー(status ${res.status})`
+    throw new ApiError(res.status, message)
   }
   // DELETE(204 No Content)はボディが無いため、res.json()を呼ぶとパースエラーになる。
   if (res.status === 204) {

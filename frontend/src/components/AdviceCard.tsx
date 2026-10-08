@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { submitAdviceFeedback, type Advice } from '../lib/api'
+import { toUserMessage } from '../lib/errors'
 
 // フェーズ9-5(docs/adr/020)で、AI提案1件分の表示をAdviceViewから切り出した。
 // ダッシュボードの「本日の提案」(AdviceView)と提案履歴画面(AdviceHistory)の
@@ -44,7 +45,7 @@ function AdviceFeedback({ advice, onSaved }: { advice: Advice; onSaved: (updated
     try {
       onSaved(await submitAdviceFeedback(advice.id, isHelpful, comment))
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(toUserMessage(err))
     } finally {
       setSaving(false)
     }

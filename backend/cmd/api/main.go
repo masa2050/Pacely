@@ -52,6 +52,8 @@ func main() {
 	log.Println("DB接続OK")
 
 	e := echo.New()
+	// Echo標準の英語エラー文をユーザー向け日本語に揃える(docs/adr/023)。
+	e.HTTPErrorHandler = handler.HTTPErrorHandler
 	e.Use(middleware.Logger())
 	e.Use(middleware.Recover())
 	// フロントエンド(Vite開発サーバ/本番Vercel)からのAuthorizationヘッダー付き

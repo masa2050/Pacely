@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { deleteRun, sortRuns, type Run } from '../lib/api'
 import { RunForm } from './RunForm'
+import { toUserMessage } from '../lib/errors'
 
 type Props = {
   runs: Run[]
@@ -30,7 +31,7 @@ export function RunList({ runs, onChanged }: Props) {
       await deleteRun(run.id)
       onChanged(runs.filter((r) => r.id !== run.id))
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(toUserMessage(err))
     }
   }
 
