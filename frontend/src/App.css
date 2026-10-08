@@ -578,6 +578,18 @@
   font-size: 13px;
 }
 
+/* フェーズ9-4: AI提案の新規生成待ち・キャッシュ表示の補足文。本文より一段控えめにする。 */
+.advice-view__waiting p {
+  margin: 0;
+}
+
+.advice-view__waiting-note,
+.advice-view__cache-note {
+  color: var(--text);
+  font-size: 12px;
+  margin: 4px 0 0;
+}
+
 .advice-view__generated-at {
   color: var(--text);
   font-size: 12px;
