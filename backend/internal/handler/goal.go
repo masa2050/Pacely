@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -30,6 +31,7 @@ func goalToError(err error) error {
 	case errors.Is(err, service.ErrInvalidInput):
 		return echo.NewHTTPError(http.StatusBadRequest, invalidInputMessage(err))
 	default:
+		log.Printf("goal: unexpected error: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "処理に失敗しました")
 	}
 }

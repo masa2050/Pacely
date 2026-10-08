@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 	"time"
 
@@ -31,6 +32,7 @@ func runToError(err error) error {
 	case errors.Is(err, service.ErrInvalidInput):
 		return echo.NewHTTPError(http.StatusBadRequest, invalidInputMessage(err))
 	default:
+		log.Printf("run: unexpected error: %v", err)
 		return echo.NewHTTPError(http.StatusInternalServerError, "処理に失敗しました")
 	}
 }

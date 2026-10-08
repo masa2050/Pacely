@@ -9,6 +9,7 @@ import { ApiError } from './api'
 // 定型の日本語になる(docs/implementation-plan.md 8-1と同じ考え方)。
 
 const GENERIC_MESSAGE = '処理に失敗しました。時間をおいてもう一度お試しください'
+const SERVER_MESSAGE = 'サーバーが混み合っています。しばらくしてからもう一度お試しください'
 const NETWORK_MESSAGE = 'サーバーに接続できませんでした。通信環境を確認して、もう一度お試しください'
 
 export const DUPLICATE_EMAIL_MESSAGE =
@@ -23,6 +24,8 @@ const AUTH_ERROR_MESSAGES: Record<string, string> = {
   weak_password: 'パスワードが簡単すぎます。より推測されにくいパスワードを設定してください',
   same_password: '現在と同じパスワードは設定できません',
   email_not_confirmed: 'メールアドレスの確認が完了していません。確認メールのリンクを開いてください',
+  validation_failed: '入力内容を確認して、もう一度お試しください',
+  otp_expired: 'リンクの有効期限が切れています。もう一度最初からやり直してください',
   email_address_invalid: 'メールアドレスの形式が正しくありません',
   signup_disabled: '現在、新規登録を受け付けていません',
   over_email_send_rate_limit: 'メールの送信回数が上限に達しました。しばらくしてからお試しください',
@@ -36,6 +39,8 @@ export function toUserMessage(err: unknown): string {
   if (isAuthError(err)) {
     // status 0 はSupabase SDKがfetch自体に失敗した場合(AuthRetryableFetchError)。
     if (err.status === 0) return NETWORK_MESSAGE
+    // 502/503/504等。リトライで直る可能性があるのでcode無しの汎用文とは分ける。
+    if (err.status !== undefined && err.status >= 500) return SERVER_MESSAGE
     return (err.code && AUTH_ERROR_MESSAGES[err.code]) || GENERIC_MESSAGE
   }
 

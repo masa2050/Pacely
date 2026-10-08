@@ -133,7 +133,9 @@ func (s *GoalService) GetProgress(ctx context.Context, userID string) (*Progress
 
 	distanceKm, ok := goalTypeDistanceKm[goal.GoalType]
 	if !ok {
-		return nil, fmt.Errorf("%w: 未対応の目標の種類です", ErrInvalidInput)
+		// 保存済みの目標のgoal_typeが対応表に無い = データの不整合でありユーザー入力の誤りではない。
+		// 400ではなく通常のエラー(handlerで500+ログ)にし、原因調査用にgoal_typeを残す。
+		return nil, fmt.Errorf("保存済みの目標に未対応のgoal_typeがあります: %q", goal.GoalType)
 	}
 	targetPace := float64(goal.TargetTimeSec) / distanceKm
 

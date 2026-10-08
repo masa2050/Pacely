@@ -44,7 +44,9 @@ async function authorizedFetch<T>(path: string, init?: RequestInit): Promise<T> 
 
   if (!res.ok) {
     const body: ApiErrorBody = await res.json().catch(() => ({}))
-    throw new ApiError(res.status, body.message ?? `APIエラー(status ${res.status})`)
+    // messageが文字列でない・空の場合(想定外のプロキシ応答等)は画面に空文や[object Object]が出ないよう定型文にする。
+    const message = typeof body.message === 'string' && body.message !== '' ? body.message : `APIエラー(status ${res.status})`
+    throw new ApiError(res.status, message)
   }
   // DELETE(204 No Content)はボディが無いため、res.json()を呼ぶとパースエラーになる。
   if (res.status === 204) {
