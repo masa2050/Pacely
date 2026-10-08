@@ -807,14 +807,21 @@
   color: var(--text);
 }
 
-.advice-history__error {
+/* フェーズ9-4: 取得失敗時の「エラー文+再読み込みボタン」(ErrorRetry.tsx)。
+   9-5でAdviceHistory専用に作った見た目を全カード共通にした。ボタンの配色を
+   クラスで明示しているのは、履歴画面のように.dashboardの外側でも同じ見た目にするため。 */
+.error-retry {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
 }
 
-.advice-history__error button {
+.error-retry .dashboard__error {
+  margin: 0;
+}
+
+.error-retry button {
   font: inherit;
   padding: 8px 12px;
   border-radius: 6px;

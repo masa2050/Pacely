@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getLatestAdvice, type Advice, type LatestAdviceResult } from '../lib/api'
 import { AdviceCard } from './AdviceCard'
 import { toUserMessage } from '../lib/errors'
+import { ErrorRetry } from './ErrorRetry'
 
 type Props = {
   onHistoryClick: () => void
@@ -22,17 +23,24 @@ export function AdviceView({ onHistoryClick }: Props) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  function fetchLatest() {
-    setLoading(true)
-    setError(null)
+  // 初回はuseEffectからload()だけを呼ぶ。loading/errorの初期値が既に「読み込み中・エラー無し」
+  // なので、effect内で同期的にsetStateする必要がない(lintのset-state-in-effect対策)。
+  // リトライ時だけfetchLatest()(ボタン押下時も同じ)で表示を「読み込み中」に戻してから取り直す(フェーズ9-4)。
+  function load() {
     getLatestAdvice()
       .then(setResult)
       .catch((err) => setError(toUserMessage(err)))
       .finally(() => setLoading(false))
   }
 
+  function fetchLatest() {
+    setLoading(true)
+    setError(null)
+    load()
+  }
+
   useEffect(() => {
-    fetchLatest()
+    load()
   }, [])
 
   function applyFeedback(updated: Advice) {
@@ -40,7 +48,10 @@ export function AdviceView({ onHistoryClick }: Props) {
   }
 
   if (loading) return <p>AI提案を確認中...</p>
-  if (error) return <p className="dashboard__error">{error}</p>
+  // 以前はエラー文だけを返しており、「最新のAI提案を確認する」ボタンごと消えて
+  // ページを再読み込みしないと復帰できなかった(9-4)。AI生成の失敗は一時的な
+  // ことが多い(外部APIの混雑等)ため、その場で再試行できるようにする。
+  if (error) return <ErrorRetry message={error} onRetry={fetchLatest} />
   if (!result) return null
 
   return (

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getActiveGoalProgress, type Progress } from '../lib/api'
 import { GOAL_TYPES } from './GoalForm'
 import { toUserMessage } from '../lib/errors'
+import { ErrorRetry } from './ErrorRetry'
 
 const GOAL_TYPE_LABELS: Record<string, string> = Object.fromEntries(GOAL_TYPES.map((t) => [t.value, t.label]))
 
@@ -26,15 +27,28 @@ export function ProgressView() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  // 初回はuseEffectからload()だけを呼ぶ。loading/errorの初期値が既に「読み込み中・エラー無し」
+  // なので、effect内で同期的にsetStateする必要がない(lintのset-state-in-effect対策)。
+  // リトライ時だけretry()で表示を「読み込み中」に戻してから取り直す(フェーズ9-4)。
+  function load() {
     getActiveGoalProgress()
       .then(setProgress)
       .catch((err) => setError(toUserMessage(err)))
       .finally(() => setLoading(false))
+  }
+
+  function retry() {
+    setLoading(true)
+    setError(null)
+    load()
+  }
+
+  useEffect(() => {
+    load()
   }, [])
 
   if (loading) return <p>読み込み中...</p>
-  if (error) return <p className="dashboard__error">{error}</p>
+  if (error) return <ErrorRetry message={error} onRetry={retry} />
 
   if (!progress) {
     return <p>現在有効な目標はありません。目標を設定すると進捗が表示されます。</p>

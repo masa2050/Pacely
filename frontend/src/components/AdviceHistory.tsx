@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { listAdvices, type Advice } from '../lib/api'
 import { AdviceCard, REST_MENU_TYPE, formatPace } from './AdviceCard'
 import { toUserMessage } from '../lib/errors'
+import { ErrorRetry } from './ErrorRetry'
 
 type Props = {
   onBack: () => void
@@ -43,17 +44,24 @@ export function AdviceHistory({ onBack }: Props) {
   // 複数開けるようにすると結局画面が縦に伸びて元の問題に戻るため(docs/adr/020 理由2)。
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
-  function fetchHistory() {
-    setLoading(true)
-    setError(null)
+  // 初回はuseEffectからload()だけを呼ぶ。loading/errorの初期値が既に「読み込み中・エラー無し」
+  // なので、effect内で同期的にsetStateする必要がない(lintのset-state-in-effect対策)。
+  // リトライ時だけretry()で表示を「読み込み中」に戻してから取り直す(フェーズ9-4)。
+  function load() {
     listAdvices()
       .then(setAdvices)
       .catch((err) => setError(toUserMessage(err)))
       .finally(() => setLoading(false))
   }
 
+  function retry() {
+    setLoading(true)
+    setError(null)
+    load()
+  }
+
   useEffect(() => {
-    fetchHistory()
+    load()
   }, [])
 
   function applyFeedback(updated: Advice) {
@@ -71,17 +79,8 @@ export function AdviceHistory({ onBack }: Props) {
 
       {loading && <p>読み込み中...</p>}
 
-      {/* エラー時にリトライ手段ごと消えないよう、再読み込みボタンを添える。
-          ページを再読み込みしないと復帰できない作りは9-4で全体的に見直す予定だが、
-          新規画面で同じ問題を作らないためここでは最初から入れておく。 */}
-      {error && (
-        <div className="advice-history__error">
-          <p className="dashboard__error">{error}</p>
-          <button type="button" onClick={fetchHistory}>
-            再読み込み
-          </button>
-        </div>
-      )}
+      {/* エラー時にリトライ手段ごと消えないよう、再読み込みボタンを添える(9-4で共通化)。 */}
+      {error && <ErrorRetry message={error} onRetry={retry} />}
 
       {advices && advices.length === 0 && !error && <p>過去の提案はまだありません。</p>}
 

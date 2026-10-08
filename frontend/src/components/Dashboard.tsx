@@ -20,6 +20,7 @@ import { ProgressView } from './ProgressView'
 import { AdviceView } from './AdviceView'
 import { Sidebar } from './Sidebar'
 import { toUserMessage } from '../lib/errors'
+import { ErrorRetry } from './ErrorRetry'
 
 type Props = {
   session: Session
@@ -38,15 +39,22 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
   const [activeGoal, setActiveGoal] = useState<Goal | null>(null)
   const [goalsError, setGoalsError] = useState<string | null>(null)
 
-  useEffect(() => {
+  // フェーズ9-4: 取得処理をカード単位の関数に切り出し、初回(useEffect)と
+  // 失敗時の再読み込み(ErrorRetry)の両方から呼べるようにした。以前はuseEffect内に
+  // 直接書いていたため、失敗するとページ全体を再読み込みするしか復帰手段がなかった。
+  function loadMe() {
     getMe()
       .then(setMe)
       .catch((err) => setError(toUserMessage(err)))
+  }
 
+  function loadRuns() {
     listRuns()
       .then(setRuns)
       .catch((err) => setRunsError(toUserMessage(err)))
+  }
 
+  function loadGoals() {
     listGoals()
       .then(setGoals)
       .catch((err) => setGoalsError(toUserMessage(err)))
@@ -54,6 +62,12 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
     getActiveGoal()
       .then(setActiveGoal)
       .catch((err) => setGoalsError(toUserMessage(err)))
+  }
+
+  useEffect(() => {
+    loadMe()
+    loadRuns()
+    loadGoals()
   }, [])
 
   return (
@@ -79,7 +93,15 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
             : ''}
       </p>
 
-      {error && <p className="dashboard__error">{error}</p>}
+      {error && (
+        <ErrorRetry
+          message={error}
+          onRetry={() => {
+            setError(null)
+            loadMe()
+          }}
+        />
+      )}
 
       {/* PC幅(1024px〜)では3カラム表示にする(左:プロフィール・記録/中央:目標・進捗/右:AI提案)。
           CSS Gridの行スパンで実装すると、カード同士の内容量の差(AI提案は長文になりがち)が
@@ -109,7 +131,15 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
 
         <div id="dashboard-runs" className="dashboard__card">
           <h2>ランニング記録</h2>
-          {runsError && <p className="dashboard__error">{runsError}</p>}
+          {runsError && (
+            <ErrorRetry
+              message={runsError}
+              onRetry={() => {
+                setRunsError(null)
+                loadRuns()
+              }}
+            />
+          )}
           <RunForm onSaved={(run) => setRuns((prev) => sortRuns([run, ...prev]))} />
           <RunList runs={runs} onChanged={setRuns} />
         </div>
@@ -118,7 +148,15 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
       <div className="dashboard__column dashboard__column--center">
         <div id="dashboard-goals" className="dashboard__card">
           <h2>目標設定</h2>
-          {goalsError && <p className="dashboard__error">{goalsError}</p>}
+          {goalsError && (
+            <ErrorRetry
+              message={goalsError}
+              onRetry={() => {
+                setGoalsError(null)
+                loadGoals()
+              }}
+            />
+          )}
           <GoalList
             activeGoal={activeGoal}
             goals={goals}
