@@ -5,12 +5,16 @@ import { toUserMessage } from '../lib/errors'
 import { ErrorRetry } from './ErrorRetry'
 
 // キャッシュ(24時間以内の生成済み提案)を返すだけなら通常1秒以内に返る一方、
-// 新規生成はAI API呼び出しを含み実測で10〜30秒、タイムアウトは最大60秒かかる。
+// 新規生成はAI API呼び出しを含み実測で10〜30秒、タイムアウト時は天候API(10秒)+AI API(60秒)で
+// 最大約70秒かかる。
 // この閾値を超えても返ってこない場合は「新規生成中の可能性が高い」とみなして表示を切り替える。
 const SLOW_THRESHOLD_MS = 3000
 
 type Props = {
   onHistoryClick: () => void
+  // 記録件数・目標の面でAI提案を生成できる状態か(Dashboardが判定)。falseのときは
+  // 遅くても「生成しています」とは出さない(needs_more_runs等で生成されないのに嘘になるため)。
+  canGenerate: boolean
 }
 
 // フェーズ5: GET /advices/latest の結果を表示する画面。
@@ -23,7 +27,7 @@ type Props = {
 // フェーズ9-5(docs/adr/020)で履歴表示の責務を外し、ここは「本日の提案」表示に
 // 専念する。以前はこのカード内で過去の提案をAdviceCardのまま縦に積んでいたため、
 // 件数が増えるほどダッシュボードが下へ伸びていた。
-export function AdviceView({ onHistoryClick }: Props) {
+export function AdviceView({ onHistoryClick, canGenerate }: Props) {
   const [result, setResult] = useState<LatestAdviceResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -67,11 +71,11 @@ export function AdviceView({ onHistoryClick }: Props) {
   }
 
   if (loading) {
-    return slow ? (
+    return slow && canGenerate ? (
       <div className="advice-view__waiting">
         <p>新しいAI提案を生成しています...</p>
         <p className="advice-view__waiting-note">
-          直近の記録・目標・天候をもとにAIが練習メニューを考えています。30秒〜1分ほどかかる場合があります。
+          直近の記録・目標・天候をもとにAIが練習メニューを考えています。30秒ほど、長いと1分以上かかる場合があります。
         </p>
       </div>
     ) : (
@@ -114,7 +118,7 @@ export function AdviceView({ onHistoryClick }: Props) {
           再生成せずキャッシュを返す設計(docs/adr/004、service/advice.goのadviceFreshWindow)。 */}
       {result.status === 'ready' && (
         <p className="advice-view__cache-note">
-          AI提案は1日1回生成されます。前回の生成から24時間が経つまでは、同じ提案が表示されます。
+          AI提案は、前回の生成から24時間が経つまでは新しく生成されず、同じ提案が表示されます。
         </p>
       )}
     </div>

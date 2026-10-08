@@ -28,6 +28,10 @@ type Props = {
   onHistoryClick: () => void
 }
 
+// AI提案を生成できる最小の記録件数。BE(service/advice.goのminRunsForAdvice)と同じ値にする。
+// AdviceViewが「新規生成中」の表示を出してよいか(=生成が起こりうるか)の判定にだけ使う。
+const MIN_RUNS_FOR_ADVICE = 3
+
 // フェーズ1の完了条件確認用: ログイン後、JWTを使って GET/PUT /users/me が
 // 実際に動くことをUI上で見えるようにする最小限の画面。
 export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
@@ -38,30 +42,59 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
   const [goals, setGoals] = useState<Goal[]>([])
   const [activeGoal, setActiveGoal] = useState<Goal | null>(null)
   const [goalsError, setGoalsError] = useState<string | null>(null)
+  // 失敗後の再読み込み中だけ「読み込み中...」を出すためのstate。初回読み込みでは使わない
+  // (従来どおり空の状態から表示し、ちらつきを増やさない)。
+  const [runsReloading, setRunsReloading] = useState(false)
+  const [goalsReloading, setGoalsReloading] = useState(false)
 
   // フェーズ9-4: 取得処理をカード単位の関数に切り出し、初回(useEffect)と
   // 失敗時の再読み込み(ErrorRetry)の両方から呼べるようにした。以前はuseEffect内に
   // 直接書いていたため、失敗するとページ全体を再読み込みするしか復帰手段がなかった。
+  // どの関数も内部でcatchしてエラー文をstateに入れるため、返すPromiseは常にresolveする
+  // (呼び出し側はfinallyで再読み込み中表示を戻すだけでよい)。
   function loadMe() {
-    getMe()
+    return getMe()
       .then(setMe)
       .catch((err) => setError(toUserMessage(err)))
   }
 
   function loadRuns() {
-    listRuns()
+    return listRuns()
       .then(setRuns)
       .catch((err) => setRunsError(toUserMessage(err)))
   }
 
-  function loadGoals() {
-    listGoals()
+  function loadGoalList() {
+    return listGoals()
       .then(setGoals)
       .catch((err) => setGoalsError(toUserMessage(err)))
+  }
 
-    getActiveGoal()
-      .then(setActiveGoal)
-      .catch((err) => setGoalsError(toUserMessage(err)))
+  function loadGoals() {
+    return Promise.all([
+      loadGoalList(),
+      getActiveGoal()
+        .then(setActiveGoal)
+        .catch((err) => setGoalsError(toUserMessage(err))),
+    ])
+  }
+
+  // 再読み込みボタン用。エラーを消してから取り直す処理をここに集約している。
+  function retryMe() {
+    setError(null)
+    loadMe()
+  }
+
+  function retryRuns() {
+    setRunsError(null)
+    setRunsReloading(true)
+    loadRuns().finally(() => setRunsReloading(false))
+  }
+
+  function retryGoals() {
+    setGoalsError(null)
+    setGoalsReloading(true)
+    loadGoals().finally(() => setGoalsReloading(false))
   }
 
   useEffect(() => {
@@ -93,15 +126,7 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
             : ''}
       </p>
 
-      {error && (
-        <ErrorRetry
-          message={error}
-          onRetry={() => {
-            setError(null)
-            loadMe()
-          }}
-        />
-      )}
+      {error && <ErrorRetry message={error} onRetry={retryMe} />}
 
       {/* PC幅(1024px〜)では3カラム表示にする(左:プロフィール・記録/中央:目標・進捗/右:AI提案)。
           CSS Gridの行スパンで実装すると、カード同士の内容量の差(AI提案は長文になりがち)が
@@ -131,15 +156,8 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
 
         <div id="dashboard-runs" className="dashboard__card">
           <h2>ランニング記録</h2>
-          {runsError && (
-            <ErrorRetry
-              message={runsError}
-              onRetry={() => {
-                setRunsError(null)
-                loadRuns()
-              }}
-            />
-          )}
+          {runsReloading && <p>読み込み中...</p>}
+          {runsError && <ErrorRetry message={runsError} onRetry={retryRuns} />}
           <RunForm onSaved={(run) => setRuns((prev) => sortRuns([run, ...prev]))} />
           <RunList runs={runs} onChanged={setRuns} />
         </div>
@@ -148,15 +166,8 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
       <div className="dashboard__column dashboard__column--center">
         <div id="dashboard-goals" className="dashboard__card">
           <h2>目標設定</h2>
-          {goalsError && (
-            <ErrorRetry
-              message={goalsError}
-              onRetry={() => {
-                setGoalsError(null)
-                loadGoals()
-              }}
-            />
-          )}
+          {goalsReloading && <p>読み込み中...</p>}
+          {goalsError && <ErrorRetry message={goalsError} onRetry={retryGoals} />}
           <GoalList
             activeGoal={activeGoal}
             goals={goals}
@@ -168,9 +179,7 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
               // 新規作成時、既存のactive目標はBE側で自動的にabandonedへ更新される
               // (docs/adr/009)。ローカル側の反映漏れを防ぐため一覧ごと取り直す。
               setActiveGoal(goal)
-              listGoals()
-                .then(setGoals)
-                .catch((err) => setGoalsError(toUserMessage(err)))
+              loadGoalList()
             }}
           />
         </div>
@@ -189,7 +198,11 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
           {/* activeGoal・runsの変化に応じて再取得したいので、Progressと同様keyで再マウントする。
               ただし取得自体は「前回生成から24時間以内ならキャッシュを返す」ため、
               毎回AIが呼ばれるわけではない(docs/adr/004)。 */}
-          <AdviceView key={`${activeGoal?.id ?? 'none'}-${runs.length}`} onHistoryClick={onHistoryClick} />
+          <AdviceView
+            key={`${activeGoal?.id ?? 'none'}-${runs.length}`}
+            onHistoryClick={onHistoryClick}
+            canGenerate={runs.length >= MIN_RUNS_FOR_ADVICE && activeGoal !== null}
+          />
         </div>
       </div>
     </div>

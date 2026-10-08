@@ -138,7 +138,8 @@
 
   .dashboard__header,
   .dashboard__greeting,
-  .dashboard__error {
+  .dashboard__error,
+  .dashboard > .error-retry {
     flex: 0 0 100%;
   }
 
