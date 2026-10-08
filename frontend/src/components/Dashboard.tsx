@@ -19,6 +19,7 @@ import { GoalList } from './GoalList'
 import { ProgressView } from './ProgressView'
 import { AdviceView } from './AdviceView'
 import { Sidebar } from './Sidebar'
+import { toUserMessage } from '../lib/errors'
 
 type Props = {
   session: Session
@@ -40,19 +41,19 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
   useEffect(() => {
     getMe()
       .then(setMe)
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(toUserMessage(err)))
 
     listRuns()
       .then(setRuns)
-      .catch((err) => setRunsError(err.message))
+      .catch((err) => setRunsError(toUserMessage(err)))
 
     listGoals()
       .then(setGoals)
-      .catch((err) => setGoalsError(err.message))
+      .catch((err) => setGoalsError(toUserMessage(err)))
 
     getActiveGoal()
       .then(setActiveGoal)
-      .catch((err) => setGoalsError(err.message))
+      .catch((err) => setGoalsError(toUserMessage(err)))
   }, [])
 
   return (
@@ -131,7 +132,7 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
               setActiveGoal(goal)
               listGoals()
                 .then(setGoals)
-                .catch((err) => setGoalsError(err.message))
+                .catch((err) => setGoalsError(toUserMessage(err)))
             }}
           />
         </div>

@@ -28,7 +28,7 @@ func goalToError(err error) error {
 	case errors.Is(err, service.ErrForbidden):
 		return echo.NewHTTPError(http.StatusForbidden, "他ユーザーの目標は操作できません")
 	case errors.Is(err, service.ErrInvalidInput):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, invalidInputMessage(err))
 	default:
 		return echo.NewHTTPError(http.StatusInternalServerError, "処理に失敗しました")
 	}

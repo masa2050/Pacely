@@ -59,13 +59,13 @@ type GoalInput struct {
 
 func (in GoalInput) validate() error {
 	if in.GoalType == "" {
-		return fmt.Errorf("%w: goal_type は必須です", ErrInvalidInput)
+		return fmt.Errorf("%w: 目標の種類を選択してください", ErrInvalidInput)
 	}
 	if in.TargetTimeSec <= 0 {
-		return fmt.Errorf("%w: target_time_sec は正の整数で指定してください", ErrInvalidInput)
+		return fmt.Errorf("%w: 目標タイムは1秒以上で入力してください", ErrInvalidInput)
 	}
 	if in.TargetDate.IsZero() {
-		return fmt.Errorf("%w: target_date は必須です", ErrInvalidInput)
+		return fmt.Errorf("%w: 目標日を入力してください", ErrInvalidInput)
 	}
 	return nil
 }
@@ -133,7 +133,7 @@ func (s *GoalService) GetProgress(ctx context.Context, userID string) (*Progress
 
 	distanceKm, ok := goalTypeDistanceKm[goal.GoalType]
 	if !ok {
-		return nil, fmt.Errorf("%w: 未知のgoal_typeです: %s", ErrInvalidInput, goal.GoalType)
+		return nil, fmt.Errorf("%w: 未対応の目標の種類です", ErrInvalidInput)
 	}
 	targetPace := float64(goal.TargetTimeSec) / distanceKm
 
@@ -162,7 +162,7 @@ func (s *GoalService) GetProgress(ctx context.Context, userID string) (*Progress
 
 func (s *GoalService) UpdateStatus(ctx context.Context, userID, id, status string) (*model.Goal, error) {
 	if !updatableGoalStatuses[status] {
-		return nil, fmt.Errorf("%w: status は achieved または abandoned を指定してください", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: 目標の状態は「達成」または「中止」を指定してください", ErrInvalidInput)
 	}
 
 	existing, err := s.repo.GetByID(ctx, id)

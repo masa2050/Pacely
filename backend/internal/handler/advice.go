@@ -2,6 +2,7 @@ package handler
 
 import (
 	"errors"
+	"log"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -31,13 +32,16 @@ func adviceToError(err error) error {
 	case errors.Is(err, service.ErrForbidden):
 		return echo.NewHTTPError(http.StatusForbidden, "他ユーザーのAI提案は操作できません")
 	case errors.Is(err, service.ErrInvalidInput):
-		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+		return echo.NewHTTPError(http.StatusBadRequest, invalidInputMessage(err))
 	case errors.Is(err, service.ErrExternalAPI):
 		// 詳細(APIキー込みのURL・レスポンス本文)はai_client.go/weather_client.go側で
 		// 発生元に近い場所ですでにログ済みなので、ここでは定型メッセージのみ返す。
 		return echo.NewHTTPError(http.StatusInternalServerError, "AI提案の生成に失敗しました。しばらくしてから再度お試しください")
 	default:
-		return echo.NewHTTPError(http.StatusInternalServerError, "AI提案の取得に失敗しました: "+err.Error())
+		// DB等の内部エラーの文面(接続先やSQLの断片を含みうる)は画面に出さず、
+		// サーバーログにのみ残す(フェーズ9-1。8-1の外部APIエラーと同じ方針)。
+		log.Printf("advice: unexpected error: %v", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "AI提案の取得に失敗しました。しばらくしてから再度お試しください")
 	}
 }
 

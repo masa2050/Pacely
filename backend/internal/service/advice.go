@@ -201,7 +201,7 @@ type FeedbackInput struct {
 // 冪等な上書き更新であり、評価をやり直した場合は最後の内容だけが残る。
 func (s *AdviceService) SubmitFeedback(ctx context.Context, userID, adviceID string, in FeedbackInput) (*model.Advice, error) {
 	if in.IsHelpful == nil {
-		return nil, fmt.Errorf("%w: is_helpful は必須です", ErrInvalidInput)
+		return nil, fmt.Errorf("%w: 評価(役に立った/立たなかった)を選択してください", ErrInvalidInput)
 	}
 
 	comment := in.Comment
@@ -212,7 +212,7 @@ func (s *AdviceService) SubmitFeedback(ctx context.Context, userID, adviceID str
 			comment = nil
 		} else {
 			if utf8.RuneCountInString(trimmed) > maxFeedbackCommentLen {
-				return nil, fmt.Errorf("%w: comment は%d文字以内で入力してください", ErrInvalidInput, maxFeedbackCommentLen)
+				return nil, fmt.Errorf("%w: コメントは%d文字以内で入力してください", ErrInvalidInput, maxFeedbackCommentLen)
 			}
 			comment = &trimmed
 		}

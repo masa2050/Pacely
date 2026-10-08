@@ -4,6 +4,7 @@ import type { Session } from '@supabase/supabase-js'
 import { getMe, updateMyProfile, changePassword, deleteAccount, type Me } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { PREFECTURES } from '../lib/prefectures'
+import { toUserMessage } from '../lib/errors'
 
 type Props = {
   session: Session
@@ -51,7 +52,7 @@ export function Settings({ session, onBack }: Props) {
         setRegion(data.region ?? '')
         setUsername(data.username ?? '')
       })
-      .catch((err) => setError(err.message))
+      .catch((err) => setError(toUserMessage(err)))
   }, [])
 
   // regionは空文字(「(未設定)」選択時)も含めて常にそのまま送る。バックエンド側は
@@ -64,7 +65,7 @@ export function Settings({ session, onBack }: Props) {
       const updated = await updateMyProfile({ region, username })
       setMe(updated)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(toUserMessage(err))
     } finally {
       setSaving(false)
     }
@@ -104,7 +105,7 @@ export function Settings({ session, onBack }: Props) {
       setNewPassword('')
       setConfirmNewPassword('')
     } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : String(err))
+      setPasswordError(toUserMessage(err))
     } finally {
       setChangingPassword(false)
     }
@@ -123,7 +124,7 @@ export function Settings({ session, onBack }: Props) {
       await deleteAccount()
       await supabase.auth.signOut()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(toUserMessage(err))
       setDeleting(false)
     }
   }

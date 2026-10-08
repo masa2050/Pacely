@@ -29,7 +29,8 @@ async function authorizedFetch<T>(path: string, init?: RequestInit): Promise<T> 
   const { data } = await supabase.auth.getSession()
   const token = data.session?.access_token
   if (!token) {
-    throw new Error('ログインしていません')
+    // toUserMessage(lib/errors.ts)が日本語のままメッセージを通せるようApiErrorにしている。
+    throw new ApiError(401, 'ログインしていません。もう一度ログインしてください')
   }
 
   const res = await fetch(`${API_BASE_URL}${path}`, {

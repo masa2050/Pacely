@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { updateGoalStatus, type Goal } from '../lib/api'
 import { GoalForm, GOAL_TYPES } from './GoalForm'
+import { toUserMessage } from '../lib/errors'
 
 type Props = {
   // 現在有効な目標(GET /goals/active)。無ければnull。
@@ -42,7 +43,7 @@ export function GoalList({ activeGoal, goals, onActiveChanged, onGoalsChanged }:
       onActiveChanged(null)
       onGoalsChanged(goals.map((g) => (g.id === updated.id ? updated : g)))
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(toUserMessage(err))
     }
   }
 

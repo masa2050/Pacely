@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { getLatestAdvice, type Advice, type LatestAdviceResult } from '../lib/api'
 import { AdviceCard } from './AdviceCard'
+import { toUserMessage } from '../lib/errors'
 
 type Props = {
   onHistoryClick: () => void
@@ -26,7 +27,7 @@ export function AdviceView({ onHistoryClick }: Props) {
     setError(null)
     getLatestAdvice()
       .then(setResult)
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(toUserMessage(err)))
       .finally(() => setLoading(false))
   }
 

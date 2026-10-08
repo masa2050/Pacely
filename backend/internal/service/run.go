@@ -40,16 +40,16 @@ type RunInput struct {
 
 func (in RunInput) validate() error {
 	if in.DistanceKm <= 0 {
-		return fmt.Errorf("%w: distance_km は正の数で指定してください", ErrInvalidInput)
+		return fmt.Errorf("%w: 距離は0より大きい数で入力してください", ErrInvalidInput)
 	}
 	if in.DurationSec <= 0 {
-		return fmt.Errorf("%w: duration_sec は正の整数で指定してください", ErrInvalidInput)
+		return fmt.Errorf("%w: 時間は1秒以上で入力してください", ErrInvalidInput)
 	}
 	if in.RunDate.IsZero() {
-		return fmt.Errorf("%w: run_date は必須です", ErrInvalidInput)
+		return fmt.Errorf("%w: 日付を入力してください", ErrInvalidInput)
 	}
 	if in.RPE != nil && (*in.RPE < 1 || *in.RPE > 10) {
-		return fmt.Errorf("%w: rpe は1〜10で指定してください(docs/adr/003)", ErrInvalidInput)
+		return fmt.Errorf("%w: きつさ(RPE)は1〜10で入力してください", ErrInvalidInput)
 	}
 	return nil
 }

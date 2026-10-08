@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listAdvices, type Advice } from '../lib/api'
 import { AdviceCard, REST_MENU_TYPE, formatPace } from './AdviceCard'
+import { toUserMessage } from '../lib/errors'
 
 type Props = {
   onBack: () => void
@@ -47,7 +48,7 @@ export function AdviceHistory({ onBack }: Props) {
     setError(null)
     listAdvices()
       .then(setAdvices)
-      .catch((err) => setError(err instanceof Error ? err.message : String(err)))
+      .catch((err) => setError(toUserMessage(err)))
       .finally(() => setLoading(false))
   }
 
