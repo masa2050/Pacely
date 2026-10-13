@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { toUserMessage } from '../lib/errors'
+import { japaneseValidation } from '../lib/validation'
 
 type Props = {
   onDone: () => void
@@ -38,7 +39,7 @@ export function ResetPasswordForm({ onDone }: Props) {
   }
 
   return (
-    <form className="auth-form" onSubmit={handleSubmit}>
+    <form className="auth-form" onSubmit={handleSubmit} {...japaneseValidation}>
       <h1>Pacely</h1>
       <p className="auth-form__subtitle">新しいパスワードを設定</p>
 

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { createGoal, updateGoal, type Goal, type GoalInput } from '../lib/api'
 import { toUserMessage } from '../lib/errors'
+import { japaneseValidation } from '../lib/validation'
 
 type Props = {
   // 指定時は編集モード(PUT、目標タイムなどの修正)、未指定時は新規作成モード(POST)。
@@ -59,7 +60,7 @@ export function GoalForm({ editingGoal, onSaved, onCancel }: Props) {
   }
 
   return (
-    <form className="goal-form" onSubmit={handleSubmit}>
+    <form className="goal-form" onSubmit={handleSubmit} {...japaneseValidation}>
       <label>
         種目
         <select value={goalType} onChange={(e) => setGoalType(e.target.value)}>

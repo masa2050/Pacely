@@ -2,6 +2,7 @@ import { useState } from 'react'
 import type { FormEvent } from 'react'
 import { supabase } from '../lib/supabase'
 import { DUPLICATE_EMAIL_MESSAGE, toUserMessage } from '../lib/errors'
+import { japaneseValidation } from '../lib/validation'
 
 type Mode = 'login' | 'signup' | 'reset-request'
 
@@ -77,7 +78,7 @@ export function AuthForm() {
   }
 
   return (
-    <form className="auth-form" onSubmit={handleSubmit}>
+    <form className="auth-form" onSubmit={handleSubmit} {...japaneseValidation}>
       <h1>Pacely</h1>
       <p className="auth-form__subtitle">
         {mode === 'login' ? 'ログイン' : mode === 'signup' ? '新規登録' : 'パスワード再設定'}
