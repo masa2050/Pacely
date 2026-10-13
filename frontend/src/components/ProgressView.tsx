@@ -3,7 +3,7 @@ import { getActiveGoalProgress, type Progress } from '../lib/api'
 import { GOAL_TYPES } from './GoalForm'
 import { toUserMessage } from '../lib/errors'
 import { ErrorRetry } from './ErrorRetry'
-import { daysUntil, formatFullDate } from '../lib/date'
+import { daysUntil, formatShortDate } from '../lib/date'
 
 const GOAL_TYPE_LABELS: Record<string, string> = Object.fromEntries(GOAL_TYPES.map((t) => [t.value, t.label]))
 
@@ -15,10 +15,12 @@ function formatPace(paceSecPerKm: number): string {
 
 function countdownText(targetDate: string): string {
   const days = daysUntil(targetDate)
-  const dateLabel = `目標日 ${formatFullDate(targetDate)}`
+  // 目標日は目標設定カードにもあるが、SP幅ではカードが縦に並び目標設定と離れるため、
+  // 「あと何日」の文脈として短い形(同じ年なら3/7)で添える。
+  const dateLabel = formatShortDate(targetDate)
   if (days > 0) return `本番まであと${days}日(${dateLabel})`
   if (days === 0) return `本日が本番です(${dateLabel})`
-  return `目標日を過ぎています(${dateLabel})。新しい目標を立てよう！`
+  return `目標日(${dateLabel})を過ぎています。新しい目標を立てよう！`
 }
 
 // diffは「平均ペース - 目標ペース」(秒/km)。正なら目標より遅い、負なら速い。

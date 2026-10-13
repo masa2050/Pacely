@@ -21,9 +21,3 @@ export function daysUntil(ymd: string, today: Date = new Date()): number {
   const now = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
   return Math.round((target - now) / 86_400_000)
 }
-
-// "2027/3/7"のような年付きの表示(残り日数の補足など)。
-export function formatFullDate(ymd: string): string {
-  const { y, m, d } = parseYmd(ymd)
-  return `${y}/${m}/${d}`
-}

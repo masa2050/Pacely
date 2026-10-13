@@ -257,9 +257,8 @@
 
 .dashboard__greeting-date {
   color: var(--text);
-  font-size: 13px;
-  font-weight: 400;
-  margin-left: 8px;
+  font-size: 12px;
+  margin: 0;
 }
 
 .dashboard__greeting-message {

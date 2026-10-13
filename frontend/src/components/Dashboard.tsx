@@ -118,8 +118,11 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
         </button>
       </header>
 
-      {/* フェーズ9-3: 1行目に「あいさつ、名前さん」と日付、2行目に時間帯に合わせた一言。 */}
+      {/* フェーズ9-3: 日付を小さく上に置き、「あいさつ、名前さん」と時間帯に合わせた一言の
+          2行を続ける。日付を名前の後ろに並べると文の一部のように見えて位置が不自然だったため、
+          ダッシュボードでよく使われる「見出しの上の小さなラベル」の形にした。 */}
       <div className="dashboard__greeting">
+        <p className="dashboard__greeting-date">{greeting.dateLabel}</p>
         <p className="dashboard__greeting-line">
           {greeting.salutation}
           {/* ユーザーネーム未設定の間は、フェーズ7-3以前と同じくメールアドレスの
@@ -129,7 +132,6 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
             : session.user.email
               ? `、${session.user.email.split('@')[0]}さん`
               : ''}
-          <span className="dashboard__greeting-date">{greeting.dateLabel}</span>
         </p>
         <p className="dashboard__greeting-message">{greeting.message}</p>
       </div>
