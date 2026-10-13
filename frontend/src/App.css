@@ -318,18 +318,25 @@
   margin-bottom: 16px;
 }
 
+/* フェーズ9-3: 「時間 [ ] 分 [ ] 秒」を折り返さず1行に収める。以前は入力欄が固定幅60pxで、
+   PC幅の列(約340px)ではカード内の幅に3組が収まらず、「秒」だけ次の行に落ちていた。
+   折り返し(wrap)をやめ、入力欄を残りの幅に合わせて縮める(flex)ことで、狭い画面でも
+   単位の文字(時間/分/秒)と入力欄が1行に並ぶようにする。 */
 .run-form__duration,
 .goal-form__duration {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .run-form__duration input,
 .goal-form__duration input {
-  width: 60px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 72px;
 }
 
 .run-form__actions,
