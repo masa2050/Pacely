@@ -3,6 +3,7 @@ import { getActiveGoalProgress, type Progress } from '../lib/api'
 import { GOAL_TYPES } from './GoalForm'
 import { toUserMessage } from '../lib/errors'
 import { ErrorRetry } from './ErrorRetry'
+import { daysUntil, formatFullDate } from '../lib/date'
 
 const GOAL_TYPE_LABELS: Record<string, string> = Object.fromEntries(GOAL_TYPES.map((t) => [t.value, t.label]))
 
@@ -10,6 +11,14 @@ function formatPace(paceSecPerKm: number): string {
   const min = Math.floor(paceSecPerKm / 60)
   const sec = Math.round(paceSecPerKm % 60)
   return `${min}:${String(sec).padStart(2, '0')}/km`
+}
+
+function countdownText(targetDate: string): string {
+  const days = daysUntil(targetDate)
+  const dateLabel = `目標日 ${formatFullDate(targetDate)}`
+  if (days > 0) return `本番まであと${days}日(${dateLabel})`
+  if (days === 0) return `本日が本番です(${dateLabel})`
+  return `目標日を過ぎています(${dateLabel})`
 }
 
 // diffは「平均ペース - 目標ペース」(秒/km)。正なら目標より遅い、負なら速い。
@@ -62,6 +71,10 @@ export function ProgressView() {
       <p className="progress-view__goal">
         {GOAL_TYPE_LABELS[goal.goal_type] ?? goal.goal_type} / 目標ペース {formatPace(target_pace_sec_per_km)}
       </p>
+      {/* 本番(目標日)までの残り日数。progress APIが返すgoal.target_dateから計算する
+          (BEの変更は不要)。練習の位置づけ(AI提案の「レースまでの残日数」と同じ情報)を
+          ユーザー自身も把握できるようにする。 */}
+      <p className="progress-view__countdown">{countdownText(goal.target_date)}</p>
       {recent_runs_count === 0 || recent_average_pace_sec_per_km === null ? (
         <p>まだ記録がありません。記録を追加すると進捗が表示されます。</p>
       ) : (

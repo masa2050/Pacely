@@ -509,6 +509,14 @@
 
 .progress-view__goal {
   font-size: 14px;
+  margin: 0 0 4px;
+}
+
+/* 本番までの残り日数。進捗カードで最も伝えたい情報なのでアクセント色で目立たせる。 */
+.progress-view__countdown {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
   margin: 0 0 12px;
 }
 

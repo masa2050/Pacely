@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { deleteRun, sortRuns, type Run } from '../lib/api'
 import { RunForm } from './RunForm'
 import { toUserMessage } from '../lib/errors'
+import { formatShortDate } from '../lib/date'
 
 type Props = {
   runs: Run[]
@@ -79,7 +80,7 @@ export function RunList({ runs, onChanged }: Props) {
               </tr>
             ) : (
               <tr key={run.id}>
-                <td>{run.run_date}</td>
+                <td>{formatShortDate(run.run_date)}</td>
                 <td>{run.distance_km}km</td>
                 <td>{formatPace(run.pace_sec_per_km)}</td>
                 <td>{run.rpe ?? '-'}</td>
