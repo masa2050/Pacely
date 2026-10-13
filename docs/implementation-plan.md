@@ -273,7 +273,7 @@ UI/UX改善(フェーズ9)より先にこちらをやる。Pacelyの中核はAI�
 #### 9-3. 表示の一貫性・細部の修正
 
 **進捗**: 全体的な配色の統一は対応済み(docs/adr/026、PR #18)。ティール系に統一し、色・角丸・影を
-`index.css`のトークンで一元管理した。続けて以下も対応済み(`feature/phase9-3-display-fixes`):
+`index.css`のトークンで一元管理した。続けて以下も対応済み(PR #19):
 - 時間入力の「秒」の折り返し: 入力欄を折り返さず縮めて1行に収めた(App.css)
 - 英語バリデーション: `lib/validation.ts`の`installJapaneseValidation`を`main.tsx`で一度呼び、
   documentのキャプチャ段階で`invalid`を受けて`setCustomValidity`で日本語に差し替える
