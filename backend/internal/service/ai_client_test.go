@@ -23,7 +23,11 @@ func fakeGemini(t *testing.T, statuses map[string]int) (*GeminiClient, *[]string
 		mu.Lock()
 		called = append(called, name)
 		mu.Unlock()
-		status := statuses[name]
+		// 指定の無いモデルは廃止済み扱い(404)。WriteHeader(0)はpanicするため既定値を持たせる。
+		status, ok := statuses[name]
+		if !ok {
+			status = http.StatusNotFound
+		}
 		w.WriteHeader(status)
 		if status == http.StatusOK {
 			_, _ = w.Write([]byte(validGeminiResponse))
@@ -36,7 +40,8 @@ func fakeGemini(t *testing.T, statuses map[string]int) (*GeminiClient, *[]string
 }
 
 func TestGenerateAdviceFallsBackWhenPrimaryBusy(t *testing.T) {
-	for _, busyStatus := range []int{http.StatusServiceUnavailable, http.StatusTooManyRequests} {
+	// 混雑(503)・クォータ超過(429)・廃止(404)・一時的な失敗(500/504)はすべて切り替える。
+	for _, busyStatus := range []int{503, 429, 404, 500, 504} {
 		c, called := fakeGemini(t, map[string]int{geminiModels[0]: busyStatus, geminiModels[1]: http.StatusOK})
 		got, err := c.GenerateAdvice(context.Background(), AdvicePromptInput{})
 		if err != nil {
@@ -81,5 +86,36 @@ func TestGenerateAdviceDoesNotFallBackOnClientError(t *testing.T) {
 	}
 	if len(*called) != 1 {
 		t.Errorf("予備モデルを呼んではいけない: %v", *called)
+	}
+}
+
+// 中断済みのcontextでは、次のモデルを呼ばずに失敗させる。
+func TestGenerateAdviceStopsWhenContextCancelled(t *testing.T) {
+	c, called := fakeGemini(t, map[string]int{geminiModels[0]: 503, geminiModels[1]: http.StatusOK})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := c.GenerateAdvice(ctx, AdvicePromptInput{})
+	if !errors.Is(err, ErrExternalAPI) {
+		t.Errorf("ErrExternalAPIを期待: %v", err)
+	}
+	if len(*called) != 0 {
+		t.Errorf("中断後にAPIを呼んではいけない: %v", *called)
+	}
+}
+
+// APIキーはURLではなくヘッダーで送る(URLだとエラー文・ログに混ざりうる)。
+func TestGenerateAdviceSendsAPIKeyInHeader(t *testing.T) {
+	var gotHeader, gotQuery string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotHeader, gotQuery = r.Header.Get("x-goog-api-key"), r.URL.RawQuery
+		_, _ = w.Write([]byte(validGeminiResponse))
+	}))
+	defer srv.Close()
+	c := &GeminiClient{apiKey: "secret", httpClient: &http.Client{Timeout: 5 * time.Second}, baseURL: srv.URL}
+	if _, err := c.GenerateAdvice(context.Background(), AdvicePromptInput{}); err != nil {
+		t.Fatal(err)
+	}
+	if gotHeader != "secret" || gotQuery != "" {
+		t.Errorf("header=%q query=%q", gotHeader, gotQuery)
 	}
 }

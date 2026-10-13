@@ -170,6 +170,25 @@ const geminiBaseURL = "https://generativelanguage.googleapis.com"
 // 廃止・混雑で入れ替わるため、将来変わったらここだけ直せばよい。
 var geminiModels = []string{"gemini-3.6-flash", "gemini-3.1-flash-lite"}
 
+// geminiTotalTimeout は全モデルを試す処理全体の上限。タイムアウトはモデルごとに60秒
+// (NewGeminiClient)だが、切り替えで合計が倍にならないようにする。
+const geminiTotalTimeout = 90 * time.Second
+
+// isModelSpecificFailure は「このモデルだけの問題で、別のモデルなら成功しうる」HTTPステータス。
+//   - 429: 無料枠のクォータ超過(モデルごとに枠が別)
+//   - 503/500/504: 混雑・一時的なサーバー側の失敗
+//   - 404: モデルの廃止(gemini-2.0-flash・2.5-flashで実際に起きた)
+//
+// 400(リクエスト不正)・401/403(認証)は別モデルでも直らないため含めない。
+func isModelSpecificFailure(status int) bool {
+	switch status {
+	case http.StatusTooManyRequests, http.StatusServiceUnavailable, http.StatusInternalServerError,
+		http.StatusGatewayTimeout, http.StatusNotFound:
+		return true
+	}
+	return false
+}
+
 // GeminiClient はGoogle Gemini API(docs/adr/002)の実装。
 // 専用SDKは導入せず、REST呼び出しのみで完結させる(go.mod依存を最小限に保つ、
 // docs/architecture.md 過剰設計をしない方針)。
@@ -229,24 +248,25 @@ type adviceJSON struct {
 	} `json:"next_menu"`
 }
 
-// callModel は1つのモデルにリクエストを送る。busyがtrueの場合は503(混雑)または429(無料枠の
-// クォータ超過)で、呼び出し側は次のモデルを試してよい。それ以外の失敗(400・認証エラー・
-// 通信失敗・タイムアウト等)は別のモデルでも直らない/待ち時間が倍になるため、errorとして返す。
+// callModel は1つのモデルにリクエストを送る。retryableがtrueの場合は、そのモデル固有の失敗
+// (isModelSpecificFailure)で、呼び出し側は次のモデルを試してよい。それ以外の失敗(400・認証
+// エラー・通信失敗・タイムアウト等)は別のモデルでも直らない/待ち時間が倍になるため、
+// errorとして返す。
 // エラーの生メッセージ・レスポンス本文はAPIキーを含みうるため、ログにのみ残す(8-1)。
-func (c *GeminiClient) callModel(ctx context.Context, modelName string, body []byte) (respBody []byte, busy bool, err error) {
-	url := c.baseURL + "/v1beta/models/" + modelName + ":generateContent?key=" + c.apiKey
+// APIキーはURLのクエリではなくx-goog-api-keyヘッダーで渡す。URLに入れると、リクエスト作成/
+// 送信の失敗時に*url.Errorがキー込みのURLをエラー文に含めてしまうため。
+func (c *GeminiClient) callModel(ctx context.Context, modelName string, body []byte) (respBody []byte, retryable bool, err error) {
+	url := c.baseURL + "/v1beta/models/" + modelName + ":generateContent"
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		// errはAPIキー込みのURLを含みうるためログのみ。
 		log.Printf("advice: gemini api request build failed: %v", err)
 		return nil, false, fmt.Errorf("%w: AIリクエストの作成に失敗しました", ErrExternalAPI)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("x-goog-api-key", c.apiKey)
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
-		// errは*url.Errorで、クエリ文字列(?key=<APIキー>)込みのリクエストURLを含むため
-		// ログにのみ残し、呼び出し元にはErrExternalAPIの定型メッセージだけを返す。
 		log.Printf("advice: gemini api call failed (%s): %v", modelName, err)
 		return nil, false, fmt.Errorf("%w: AI API呼び出しに失敗しました", ErrExternalAPI)
 	}
@@ -257,8 +277,8 @@ func (c *GeminiClient) callModel(ctx context.Context, modelName string, body []b
 		log.Printf("advice: gemini api response read failed (%s): %v", modelName, err)
 		return nil, false, fmt.Errorf("%w: AI APIのレスポンス取得に失敗しました", ErrExternalAPI)
 	}
-	if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusTooManyRequests {
-		log.Printf("advice: gemini api busy (%s) status %d: %s", modelName, resp.StatusCode, string(respBody))
+	if isModelSpecificFailure(resp.StatusCode) {
+		log.Printf("advice: gemini api unavailable (%s) status %d: %s", modelName, resp.StatusCode, string(respBody))
 		return nil, true, nil
 	}
 	if resp.StatusCode != http.StatusOK {
@@ -282,23 +302,34 @@ func (c *GeminiClient) GenerateAdvice(ctx context.Context, in AdvicePromptInput)
 		return AdviceGeneration{}, fmt.Errorf("%w: AIリクエストの組み立てに失敗しました", ErrExternalAPI)
 	}
 
+	// 各モデルに60秒のhttp.Clientタイムアウトがあるため、切り替えを重ねると待ち時間が
+	// 倍になる。全体の上限を設け、遅い失敗が続いてもこれ以上は待たない。
+	ctx, cancel := context.WithTimeout(ctx, geminiTotalTimeout)
+	defer cancel()
+
 	var respBody []byte
+	found := false
 	for i, modelName := range geminiModels {
-		body, busy, err := c.callModel(ctx, modelName, b)
+		// リクエストが中断された/全体の上限に達した後に、次のモデルへ無駄な呼び出しをしない。
+		if err := ctx.Err(); err != nil {
+			log.Printf("advice: gemini fallback stopped: %v", err)
+			return AdviceGeneration{}, fmt.Errorf("%w: AI API呼び出しが中断されました", ErrExternalAPI)
+		}
+		body, retryable, err := c.callModel(ctx, modelName, b)
 		if err != nil {
 			return AdviceGeneration{}, err
 		}
-		if !busy {
-			respBody = body
+		if !retryable {
+			respBody, found = body, true
 			if i > 0 {
 				log.Printf("advice: generated with fallback model %s", modelName)
 			}
 			break
 		}
-		// 混雑・クォータ超過。次のモデルがあれば切り替える。
+		// このモデルでは生成できなかった。次のモデルがあれば切り替える。
 	}
-	if respBody == nil {
-		return AdviceGeneration{}, fmt.Errorf("%w: すべてのAIモデルが混雑しています", ErrExternalAPI)
+	if !found {
+		return AdviceGeneration{}, fmt.Errorf("%w: すべてのAIモデルで生成できませんでした", ErrExternalAPI)
 	}
 
 	var gr geminiResponse
