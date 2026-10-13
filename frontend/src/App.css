@@ -243,8 +243,27 @@
 }
 
 .dashboard__greeting {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dashboard__greeting-line {
   color: var(--text-h);
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.dashboard__greeting-date {
+  color: var(--text);
+  font-size: 12px;
+  margin: 0;
+}
+
+.dashboard__greeting-message {
+  color: var(--text);
+  font-size: 14px;
   margin: 0;
 }
 
@@ -318,18 +337,26 @@
   margin-bottom: 16px;
 }
 
+/* フェーズ9-3: 「時間 [ ] 分 [ ] 秒」を折り返さず1行に収める。以前は入力欄が固定幅60pxで、
+   PC幅の列(約340px)ではカード内の幅に3組が収まらず、「秒」だけ次の行に落ちていた。
+   折り返し(wrap)をやめ、入力欄を残りの幅に合わせて縮める(flex)ことで、狭い画面でも
+   単位の文字(時間/分/秒)と入力欄が1行に並ぶようにする。 */
 .run-form__duration,
 .goal-form__duration {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .run-form__duration input,
 .goal-form__duration input {
-  width: 60px;
+  flex: 1 1 0;
+  /* 縮められるようにしつつ、320px幅などで数字が読めなくなるほど小さくならない下限を設ける。 */
+  min-width: 44px;
+  max-width: 72px;
 }
 
 .run-form__actions,
@@ -502,6 +529,19 @@
 
 .progress-view__goal {
   font-size: 14px;
+  margin: 0 0 4px;
+}
+
+.progress-view__countdown a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+/* 本番までの残り日数。進捗カードで最も伝えたい情報なのでアクセント色で目立たせる。 */
+.progress-view__countdown {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent);
   margin: 0 0 12px;
 }
 
