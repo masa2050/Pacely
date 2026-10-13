@@ -158,12 +158,17 @@ func buildPrompt(in AdvicePromptInput) string {
 		model.MenuTypeBuildUp, model.MenuTypeBuildUp)
 }
 
-const (
-	// gemini-2.0-flashはGoogle側で廃止された(2026年時点、404 NOT_FOUND)ため
-	// gemini-3.6-flashに変更。将来またモデルが廃止された場合はここだけ直せばよい。
-	geminiModel    = "gemini-3.6-flash"
-	geminiEndpoint = "https://generativelanguage.googleapis.com/v1beta/models/" + geminiModel + ":generateContent"
-)
+const geminiBaseURL = "https://generativelanguage.googleapis.com"
+
+// geminiModels は優先順位順のモデル一覧。先頭から試し、混雑(503)や無料枠のクォータ超過(429)で
+// 断られた場合のみ次のモデルへ切り替える(docs/adr/025)。
+//   - gemini-3.6-flash: 通常使うモデル(提案の質を優先)
+//   - gemini-3.1-flash-lite: 予備。軽量で質はやや劣る可能性があるが、メインが混んでいても
+//     無料枠で通ることが多かった(2026-10-14 実測)
+//
+// gemini-2.0-flash・gemini-2.5-flashはGoogle側で廃止済み(404 NOT_FOUND)。モデルは
+// 廃止・混雑で入れ替わるため、将来変わったらここだけ直せばよい。
+var geminiModels = []string{"gemini-3.6-flash", "gemini-3.1-flash-lite"}
 
 // GeminiClient はGoogle Gemini API(docs/adr/002)の実装。
 // 専用SDKは導入せず、REST呼び出しのみで完結させる(go.mod依存を最小限に保つ、
@@ -171,13 +176,15 @@ const (
 type GeminiClient struct {
 	apiKey     string
 	httpClient *http.Client
+	// baseURLはテストでhttptestのサーバーに差し替えるためのもの。本番は常にgeminiBaseURL。
+	baseURL string
 }
 
 func NewGeminiClient(apiKey string) *GeminiClient {
 	// 無料枠はピーク時に他の利用者と処理能力を共有するため、応答が遅延することがある
 	// (2026-09-22 本番で30秒ちょうどでのタイムアウトを確認、devlog参照)。無料枠を使い続ける前提の
 	// 暫定対応として60秒に延長する。根本対応ではなく、頻発するようなら有料ティアへの切り替えを検討する。
-	return &GeminiClient{apiKey: apiKey, httpClient: &http.Client{Timeout: 60 * time.Second}}
+	return &GeminiClient{apiKey: apiKey, httpClient: &http.Client{Timeout: 60 * time.Second}, baseURL: geminiBaseURL}
 }
 
 type geminiRequest struct {
@@ -222,6 +229,46 @@ type adviceJSON struct {
 	} `json:"next_menu"`
 }
 
+// callModel は1つのモデルにリクエストを送る。busyがtrueの場合は503(混雑)または429(無料枠の
+// クォータ超過)で、呼び出し側は次のモデルを試してよい。それ以外の失敗(400・認証エラー・
+// 通信失敗・タイムアウト等)は別のモデルでも直らない/待ち時間が倍になるため、errorとして返す。
+// エラーの生メッセージ・レスポンス本文はAPIキーを含みうるため、ログにのみ残す(8-1)。
+func (c *GeminiClient) callModel(ctx context.Context, modelName string, body []byte) (respBody []byte, busy bool, err error) {
+	url := c.baseURL + "/v1beta/models/" + modelName + ":generateContent?key=" + c.apiKey
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		// errはAPIキー込みのURLを含みうるためログのみ。
+		log.Printf("advice: gemini api request build failed: %v", err)
+		return nil, false, fmt.Errorf("%w: AIリクエストの作成に失敗しました", ErrExternalAPI)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		// errは*url.Errorで、クエリ文字列(?key=<APIキー>)込みのリクエストURLを含むため
+		// ログにのみ残し、呼び出し元にはErrExternalAPIの定型メッセージだけを返す。
+		log.Printf("advice: gemini api call failed (%s): %v", modelName, err)
+		return nil, false, fmt.Errorf("%w: AI API呼び出しに失敗しました", ErrExternalAPI)
+	}
+	defer resp.Body.Close()
+
+	respBody, err = io.ReadAll(resp.Body)
+	if err != nil {
+		log.Printf("advice: gemini api response read failed (%s): %v", modelName, err)
+		return nil, false, fmt.Errorf("%w: AI APIのレスポンス取得に失敗しました", ErrExternalAPI)
+	}
+	if resp.StatusCode == http.StatusServiceUnavailable || resp.StatusCode == http.StatusTooManyRequests {
+		log.Printf("advice: gemini api busy (%s) status %d: %s", modelName, resp.StatusCode, string(respBody))
+		return nil, true, nil
+	}
+	if resp.StatusCode != http.StatusOK {
+		// respBodyはGoogle側の生JSON(エラー詳細等)なのでログのみ。
+		log.Printf("advice: gemini api returned status %d (%s): %s", resp.StatusCode, modelName, string(respBody))
+		return nil, false, fmt.Errorf("%w: AI APIがエラーを返しました(status %d)", ErrExternalAPI, resp.StatusCode)
+	}
+	return respBody, false, nil
+}
+
 func (c *GeminiClient) GenerateAdvice(ctx context.Context, in AdvicePromptInput) (AdviceGeneration, error) {
 	reqBody := geminiRequest{
 		Contents:         []geminiContent{{Parts: []geminiPart{{Text: buildPrompt(in)}}}},
@@ -235,32 +282,23 @@ func (c *GeminiClient) GenerateAdvice(ctx context.Context, in AdvicePromptInput)
 		return AdviceGeneration{}, fmt.Errorf("%w: AIリクエストの組み立てに失敗しました", ErrExternalAPI)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, geminiEndpoint+"?key="+c.apiKey, bytes.NewReader(b))
-	if err != nil {
-		// errはAPIキー込みのURLを含みうるためログのみ。
-		log.Printf("advice: gemini api request build failed: %v", err)
-		return AdviceGeneration{}, fmt.Errorf("%w: AIリクエストの作成に失敗しました", ErrExternalAPI)
+	var respBody []byte
+	for i, modelName := range geminiModels {
+		body, busy, err := c.callModel(ctx, modelName, b)
+		if err != nil {
+			return AdviceGeneration{}, err
+		}
+		if !busy {
+			respBody = body
+			if i > 0 {
+				log.Printf("advice: generated with fallback model %s", modelName)
+			}
+			break
+		}
+		// 混雑・クォータ超過。次のモデルがあれば切り替える。
 	}
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
-		// errは*url.Errorで、クエリ文字列(?key=<APIキー>)込みのリクエストURLを含むため
-		// ログにのみ残し、呼び出し元にはErrExternalAPIの定型メッセージだけを返す。
-		log.Printf("advice: gemini api call failed: %v", err)
-		return AdviceGeneration{}, fmt.Errorf("%w: AI API呼び出しに失敗しました", ErrExternalAPI)
-	}
-	defer resp.Body.Close()
-
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		log.Printf("advice: gemini api response read failed: %v", err)
-		return AdviceGeneration{}, fmt.Errorf("%w: AI APIのレスポンス取得に失敗しました", ErrExternalAPI)
-	}
-	if resp.StatusCode != http.StatusOK {
-		// respBodyはGoogle側の生JSON(429時のエラー詳細等)なのでログのみ。
-		log.Printf("advice: gemini api returned status %d: %s", resp.StatusCode, string(respBody))
-		return AdviceGeneration{}, fmt.Errorf("%w: AI APIがエラーを返しました(status %d)", ErrExternalAPI, resp.StatusCode)
+	if respBody == nil {
+		return AdviceGeneration{}, fmt.Errorf("%w: すべてのAIモデルが混雑しています", ErrExternalAPI)
 	}
 
 	var gr geminiResponse
