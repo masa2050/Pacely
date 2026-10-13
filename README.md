@@ -15,6 +15,31 @@ Pacelyはランニング**記録**アプリではなく、ランニング**AIコ
 記録の蓄積そのものではなく「目標逆算型の提案」が価値の中心であり、この前提を外れる機能は
 MVPに含めていない（→ [docs/requirements.md](docs/requirements.md)）。
 
+## 画面
+
+PC幅では記録・目標/進捗・AI提案の3カラム、スマホ幅では縦1列に切り替わるレスポンシブ構成。
+
+<p align="center">
+  <img src="docs/images/dashboard.png" alt="ダッシュボード(PC幅): プロフィール・ランニング記録・目標設定・進捗確認・AI提案を3カラムで表示" width="720">
+</p>
+
+<table>
+  <tr>
+    <td align="center" valign="top" width="34%">
+      <img src="docs/images/advice.png" alt="AI提案カード: アドバイス・本日の練習メニュー・フィードバック" width="100%"><br>
+      <sub><b>AI提案</b><br>アドバイスと本日の練習メニュー。<br>役に立ったかをフィードバックできる</sub>
+    </td>
+    <td align="center" valign="top" width="38%">
+      <img src="docs/images/history.png" alt="AI提案の履歴: 日付・メニュー・評価の1行一覧" width="100%"><br>
+      <sub><b>提案履歴</b><br>過去の提案を1行で一覧し、<br>クリックで全文を展開</sub>
+    </td>
+    <td align="center" valign="top" width="28%">
+      <img src="docs/images/mobile.png" alt="スマホ幅のダッシュボード" width="100%"><br>
+      <sub><b>スマホ幅</b><br>縦1列に切り替わる</sub>
+    </td>
+  </tr>
+</table>
+
 ## 主な機能
 
 | 機能 | 内容 |
