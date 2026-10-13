@@ -53,9 +53,9 @@
   font-size: 20px;
   line-height: 1;
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text-h);
   cursor: pointer;
 }
@@ -71,21 +71,21 @@
   min-width: 160px;
   box-sizing: border-box;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 6px;
-  background: var(--bg);
+  background: var(--surface);
   box-shadow: var(--shadow);
 }
 
 /* 「設定」「提案履歴」は<button>要素のため、.dashboard buttonのbutton{}が
-   .sidebar__link単体より詳細度が高く、素の状態が紫塗りつぶしになってしまい
+   .sidebar__link単体より詳細度が高く、素の状態がアクセント色の塗りつぶしになってしまい
    ホバー時にだけ薄くなる(色が引く)見た目になっていた。.dashboardを前置して
    詳細度を上げ、<a>の「記録」「目標」「AI提案」と同じ見た目に揃える。 */
 .dashboard .sidebar__link {
   font: inherit;
   text-align: left;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: none;
   background: transparent;
   color: var(--text-h);
@@ -173,15 +173,15 @@
 .goal-form select {
   font: inherit;
   padding: 8px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface);
   color: var(--text-h);
 }
 
 /* Settings.tsx はADR-015で専用画面として分離した際、.dashboardの外側に
    独立した.settingsルートを持つ構成になった。そのため.dashboard buttonの
-   紫ボタンスタイルが及ばず、保存・パスワード変更ボタンがブラウザ標準の
+   アクセント色のボタンスタイルが及ばず、保存・パスワード変更ボタンがブラウザ標準の
    見た目のまま、退会ボタンだけ.dashboard__card--dangerで背景色のみ
    当たってレイアウト(パディング・角丸)が揃っていなかった。.settingsも
    対象に加えて統一する。 */
@@ -190,10 +190,10 @@
 .settings button {
   font: inherit;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   cursor: pointer;
 }
 
@@ -202,6 +202,17 @@
 .dashboard button:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* フェーズ9-3: ボタンのホバー表現。背景色(background-color)を差し替えると、同じセレクタに
+   含まれる透明なボタン(記録の編集アイコン・戻るボタン等)まで塗りつぶしてしまうため、
+   背景色はそのままに半透明の色(--hover-overlay)を背景画像として重ねる。塗りのボタンは
+   少し濃く/明るく、透明なボタンは薄く色が付くだけになる。 */
+.auth-form button:hover:not(:disabled),
+.dashboard button:hover:not(:disabled),
+.settings button:hover:not(:disabled),
+.advice-history button:hover:not(:disabled) {
+  background-image: linear-gradient(var(--hover-overlay), var(--hover-overlay));
 }
 
 .auth-form__switch {
@@ -238,23 +249,27 @@
 }
 
 .dashboard__error {
-  color: #e5484d;
+  color: var(--danger);
   font-size: 14px;
 }
 
 .dashboard__card {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
+  /* フェーズ9-3: ページ背景(--bg)をわずかに色付けし、カードは白(--surface)+薄い影で
+     浮かせる。以前は枠線だけでページと同じ色だったため、カードの区切りが平板に見えていた。 */
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
   padding: 16px;
   text-align: left;
 }
 
 .dashboard__card--danger {
-  border-color: #e5484d;
+  border-color: var(--danger);
 }
 
 .dashboard__card--danger button {
-  background: #e5484d;
+  background: var(--danger);
 }
 
 .dashboard__card dl {
@@ -327,7 +342,7 @@
 .run-list__error,
 .goal-form__error,
 .goal-list__error {
-  color: #e5484d;
+  color: var(--danger);
   font-size: 14px;
 }
 
@@ -424,7 +439,7 @@
 .run-list thead th {
   position: sticky;
   top: 0;
-  background: var(--bg);
+  background: var(--surface);
 }
 
 @media (max-width: 480px) {
@@ -457,7 +472,7 @@
   font: inherit;
   padding: 4px 8px;
   margin-right: 4px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-h);
@@ -515,7 +530,7 @@
 
 .advice-view__card {
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   padding: 12px;
   text-align: left;
 }
@@ -628,8 +643,8 @@
 /* グッドマーク・バッドマークは絵文字1文字だけの円形ボタンにする。
    テキストボタンだと文字量の差で横並びのバランスが悪く分かりにくかったため、
    意味が直感的に伝わるアイコンボタンに変更した。
-   「.dashboard button」(全ボタン共通の塗りつぶし紫背景)より詳細度を上げて
-   ニュートラルな見た目に上書きしないと、未選択でも塗りつぶし紫のままになり
+   「.dashboard button」(全ボタン共通のアクセント色の塗りつぶし背景)より詳細度を上げて
+   ニュートラルな見た目に上書きしないと、未選択でもアクセント色の塗りつぶしのままになり
    「押した状態」に見えてしまうため、.dashboardを含めた2クラス構成にしている。
    フェーズ9-5で提案履歴の専用画面(.advice-history)にも同じカードを表示するように
    なったため、そちらのセレクタも併記している(docs/adr/020)。 */
@@ -652,14 +667,14 @@
    グッド=緑・バッド=赤(既存のdashboard__card--dangerと同系色)に分ける。 */
 .dashboard .advice-feedback__button--good.advice-feedback__button--selected,
 .advice-history .advice-feedback__button--good.advice-feedback__button--selected {
-  background: rgba(48, 164, 108, 0.15);
-  border-color: #30a46c;
+  background: var(--success-bg);
+  border-color: var(--success);
 }
 
 .dashboard .advice-feedback__button--bad.advice-feedback__button--selected,
 .advice-history .advice-feedback__button--bad.advice-feedback__button--selected {
-  background: rgba(229, 72, 77, 0.12);
-  border-color: #e5484d;
+  background: var(--danger-bg);
+  border-color: var(--danger);
 }
 
 .advice-feedback__comment-label {
@@ -675,8 +690,8 @@
   font-size: 13px;
   padding: 6px 8px;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
   color: var(--text-h);
   resize: vertical;
 }
@@ -711,7 +726,7 @@
   align-self: flex-start;
   font: inherit;
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-h);
@@ -765,14 +780,14 @@
   gap: 12px;
 }
 
-/* .settings buttonの紫塗りつぶしより詳細度を上げて、戻るボタンは
+/* .settings buttonのアクセント色の塗りつぶしより詳細度を上げて、戻るボタンは
    他画面(プライバシーポリシー等)と同じニュートラルな枠線スタイルを保つ。
-   「戻る」は主要操作ではないため、紫の強調色で目立たせる対象から外している。 */
+   「戻る」は主要操作ではないため、アクセント色で目立たせる対象から外している。 */
 .settings .settings__back {
   align-self: flex-start;
   font: inherit;
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-h);
@@ -802,7 +817,7 @@
   align-self: flex-start;
   font: inherit;
   padding: 6px 10px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--border);
   background: transparent;
   color: var(--text-h);
@@ -837,10 +852,10 @@
 .error-retry button {
   font: inherit;
   padding: 8px 12px;
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   border: 1px solid transparent;
   background: var(--accent);
-  color: white;
+  color: var(--on-accent);
   cursor: pointer;
 }
 
@@ -851,8 +866,10 @@
   margin: 0;
   padding: 0;
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   overflow: hidden;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
 
 .advice-history__item + .advice-history__item {

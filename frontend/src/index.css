@@ -1,19 +1,30 @@
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
-  --code-bg: #f4f3ec;
-  --accent: #aa3bff;
-  --accent-bg: rgba(170, 59, 255, 0.1);
-  --accent-border: rgba(170, 59, 255, 0.5);
-  --social-bg: rgba(244, 243, 236, 0.5);
+  /* フェーズ9-3: 配色(docs/adr/026)。Viteテンプレートの既定配色(紫#aa3bff)から、
+     ランニング・健康・持続を連想させるティール系に変更した。色はすべてここで定義し、
+     App.cssからはvar(--…)で参照する(色の直書きをしない)。
+     アクセント色は白文字とのコントラスト比が5.03(WCAG AAの4.5以上)になる濃さにしている。 */
+  --text: #5b6b67;
+  --text-h: #1a2523;
+  --bg: #f5f8f7;
+  --surface: #ffffff;
+  --border: #dde5e3;
+  --accent: #0b7d6e;
+  --accent-bg: rgba(11, 125, 110, 0.1);
+  --on-accent: #ffffff;
+  /* ホバー時にボタンの背景へ重ねる半透明色(App.css参照)。ライトは暗く、ダークは明るくする。 */
+  --hover-overlay: rgba(0, 0, 0, 0.08);
+  --danger: #c8363b;
+  --danger-bg: rgba(200, 54, 59, 0.1);
+  --success: #1a8a55;
+  --success-bg: rgba(26, 138, 85, 0.12);
+  --radius-sm: 8px;
+  --radius-md: 12px;
   --shadow:
-    rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
+    rgba(16, 40, 36, 0.1) 0 10px 15px -3px, rgba(16, 40, 36, 0.05) 0 4px 6px -2px;
+  --shadow-card: rgba(16, 40, 36, 0.06) 0 1px 3px, rgba(16, 40, 36, 0.04) 0 4px 12px;
 
   --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
   --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --mono: ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
@@ -32,21 +43,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
+    --text: #9fb0ab;
+    --text-h: #eef4f2;
+    --bg: #121816;
+    --surface: #1a2220;
+    --border: #2a3532;
+    /* ダークでは明るいティールにし、ボタンの文字は白ではなく濃い色にする
+       (白文字だとコントラスト比2.19で読みにくいため。濃い文字なら7.79)。 */
+    --accent: #2cc4ad;
+    --accent-bg: rgba(44, 196, 173, 0.15);
+    --on-accent: #08201c;
+    --hover-overlay: rgba(255, 255, 255, 0.1);
+    --danger: #f2777b;
+    --danger-bg: rgba(242, 119, 123, 0.15);
+    --success: #4cc98d;
+    --success-bg: rgba(76, 201, 141, 0.15);
     --shadow:
       rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
+    --shadow-card: rgba(0, 0, 0, 0.3) 0 1px 3px, rgba(0, 0, 0, 0.2) 0 4px 12px;
   }
 }
 
@@ -96,19 +110,4 @@ h2 {
 }
 p {
   margin: 0;
-}
-
-code,
-.counter {
-  font-family: var(--mono);
-  display: inline-flex;
-  border-radius: 4px;
-  color: var(--text-h);
-}
-
-code {
-  font-size: 15px;
-  line-height: 135%;
-  padding: 4px 8px;
-  background: var(--code-bg);
 }
