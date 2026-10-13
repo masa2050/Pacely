@@ -18,7 +18,7 @@ function countdownText(targetDate: string): string {
   const dateLabel = `目標日 ${formatFullDate(targetDate)}`
   if (days > 0) return `本番まであと${days}日(${dateLabel})`
   if (days === 0) return `本日が本番です(${dateLabel})`
-  return `目標日を過ぎています(${dateLabel})`
+  return `目標日を過ぎています(${dateLabel})。新しい目標を立てよう！`
 }
 
 // diffは「平均ペース - 目標ペース」(秒/km)。正なら目標より遅い、負なら速い。

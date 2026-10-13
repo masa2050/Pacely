@@ -46,6 +46,9 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
   // (従来どおり空の状態から表示し、ちらつきを増やさない)。
   const [runsReloading, setRunsReloading] = useState(false)
   const [goalsReloading, setGoalsReloading] = useState(false)
+  // 描画のたびに計算し直すと、時間帯の境目(例: 9:59→10:00)で文が変わるだけなので、
+  // 初回表示時の値で固定する(useStateの初期化関数は最初の1回だけ呼ばれる)。
+  const [greeting] = useState(() => getGreeting())
 
   // フェーズ9-4: 取得処理をカード単位の関数に切り出し、初回(useEffect)と
   // 失敗時の再読み込み(ErrorRetry)の両方から呼べるようにした。以前はuseEffect内に
@@ -115,16 +118,21 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
         </button>
       </header>
 
-      <p className="dashboard__greeting">
-        {getGreeting()}
-        {/* ユーザーネーム未設定の間は、フェーズ7-3以前と同じくメールアドレスの
-            ローカル部を仮の表示名として使う(docs/implementation-plan.md 7-3)。 */}
-        {me?.username
-          ? `、${me.username}さん`
-          : session.user.email
-            ? `、${session.user.email.split('@')[0]}さん`
-            : ''}
-      </p>
+      {/* フェーズ9-3: 1行目に「あいさつ、名前さん」と日付、2行目に時間帯に合わせた一言。 */}
+      <div className="dashboard__greeting">
+        <p className="dashboard__greeting-line">
+          {greeting.salutation}
+          {/* ユーザーネーム未設定の間は、フェーズ7-3以前と同じくメールアドレスの
+              ローカル部を仮の表示名として使う(docs/implementation-plan.md 7-3)。 */}
+          {me?.username
+            ? `、${me.username}さん`
+            : session.user.email
+              ? `、${session.user.email.split('@')[0]}さん`
+              : ''}
+          <span className="dashboard__greeting-date">{greeting.dateLabel}</span>
+        </p>
+        <p className="dashboard__greeting-message">{greeting.message}</p>
+      </div>
 
       {error && <ErrorRetry message={error} onRetry={retryMe} />}
 
