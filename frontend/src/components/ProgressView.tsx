@@ -13,14 +13,24 @@ function formatPace(paceSecPerKm: number): string {
   return `${min}:${String(sec).padStart(2, '0')}/km`
 }
 
-function countdownText(targetDate: string): string {
+// 目標日までの案内文。過ぎている場合は、目標設定カードへ移動するリンクを添える。
+function Countdown({ targetDate }: { targetDate: string }) {
   const days = daysUntil(targetDate)
+  // 日付を解釈できなかった(NaN)場合に、「過ぎています」と誤表示しないよう何も出さない。
+  if (Number.isNaN(days)) return null
   // 目標日は目標設定カードにもあるが、SP幅ではカードが縦に並び目標設定と離れるため、
   // 「あと何日」の文脈として短い形(同じ年なら3/7)で添える。
   const dateLabel = formatShortDate(targetDate)
-  if (days > 0) return `本番まであと${days}日(${dateLabel})`
-  if (days === 0) return `本日が本番です(${dateLabel})`
-  return `目標日(${dateLabel})を過ぎています。新しい目標を立てよう！`
+  let text: React.ReactNode
+  if (days > 0) text = `本番まであと${days}日(${dateLabel})`
+  else if (days === 0) text = `本日が本番です(${dateLabel})`
+  else
+    text = (
+      <>
+        目標日({dateLabel})を過ぎています。<a href="#dashboard-goals">新しい目標を立てよう！</a>
+      </>
+    )
+  return <p className="progress-view__countdown">{text}</p>
 }
 
 // diffは「平均ペース - 目標ペース」(秒/km)。正なら目標より遅い、負なら速い。
@@ -76,7 +86,7 @@ export function ProgressView() {
       {/* 本番(目標日)までの残り日数。progress APIが返すgoal.target_dateから計算する
           (BEの変更は不要)。練習の位置づけ(AI提案の「レースまでの残日数」と同じ情報)を
           ユーザー自身も把握できるようにする。 */}
-      <p className="progress-view__countdown">{countdownText(goal.target_date)}</p>
+      <Countdown targetDate={goal.target_date} />
       {recent_runs_count === 0 || recent_average_pace_sec_per_km === null ? (
         <p>まだ記録がありません。記録を追加すると進捗が表示されます。</p>
       ) : (

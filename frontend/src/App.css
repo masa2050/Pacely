@@ -354,7 +354,8 @@
 .run-form__duration input,
 .goal-form__duration input {
   flex: 1 1 0;
-  min-width: 0;
+  /* 縮められるようにしつつ、320px幅などで数字が読めなくなるほど小さくならない下限を設ける。 */
+  min-width: 44px;
   max-width: 72px;
 }
 
@@ -529,6 +530,11 @@
 .progress-view__goal {
   font-size: 14px;
   margin: 0 0 4px;
+}
+
+.progress-view__countdown a {
+  color: var(--accent);
+  text-decoration: underline;
 }
 
 /* 本番までの残り日数。進捗カードで最も伝えたい情報なのでアクセント色で目立たせる。 */

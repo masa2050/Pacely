@@ -5,7 +5,6 @@ import { getMe, updateMyProfile, changePassword, deleteAccount, type Me } from '
 import { supabase } from '../lib/supabase'
 import { PREFECTURES } from '../lib/prefectures'
 import { toUserMessage } from '../lib/errors'
-import { japaneseValidation } from '../lib/validation'
 
 type Props = {
   session: Session
@@ -189,7 +188,7 @@ export function Settings({ session, onBack }: Props) {
             パスワードを変更する
           </button>
         ) : (
-          <form className="settings__password-form" onSubmit={handleChangePassword} {...japaneseValidation}>
+          <form className="settings__password-form" onSubmit={handleChangePassword}>
             <label>
               現在のパスワード
               <input

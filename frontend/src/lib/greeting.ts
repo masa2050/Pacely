@@ -53,7 +53,9 @@ export type Greeting = {
 
 export function getGreeting(date: Date = new Date()): Greeting {
   const slot = slotFor(date.getHours())
-  // 年始からの通算日で一言を選ぶ。日が変われば別の文になる。
+  // 年始からの通算日(1月1日=1)で一言を選ぶ。Date.UTC(年, 0, 0)は「前年の12月31日」を指すので、
+  // 1月1日との差が1になる。日が変われば別の文になる。messagesの件数を増減すると、
+  // どの日にどの文が出るかが入れ替わる(件数で割った余りで選んでいるため)。
   const dayOfYear = Math.floor((Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) - Date.UTC(date.getFullYear(), 0, 0)) / 86_400_000)
   return {
     salutation: slot.salutation,

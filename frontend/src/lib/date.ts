@@ -1,7 +1,8 @@
 // APIの日付は"YYYY-MM-DD"の文字列。new Date("2026-09-24")はUTCの0時として解釈され、
 // 環境によって日付がずれうるため、文字列のまま年・月・日に分解して扱う。
 function parseYmd(ymd: string): { y: number; m: number; d: number } {
-  const [y, m, d] = ymd.split('-').map(Number)
+  // 将来APIが"2026-09-24T00:00:00Z"のような時刻付きで返しても壊れないよう、先頭の日付部分だけを使う。
+  const [y, m, d] = ymd.slice(0, 10).split('-').map(Number)
   return { y, m, d }
 }
 
@@ -9,6 +10,7 @@ function parseYmd(ymd: string): { y: number; m: number; d: number } {
 // 年が違う場合だけ "2025/9/24" と年を付ける(フェーズ9-3)。
 export function formatShortDate(ymd: string, today: Date = new Date()): string {
   const { y, m, d } = parseYmd(ymd)
+  if (Number.isNaN(y + m + d)) return ymd
   return y === today.getFullYear() ? `${m}/${d}` : `${y}/${m}/${d}`
 }
 

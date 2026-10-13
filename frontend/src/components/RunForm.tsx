@@ -1,7 +1,6 @@
 import { useState } from 'react'
 import { createRun, updateRun, type Run, type RunInput } from '../lib/api'
 import { toUserMessage } from '../lib/errors'
-import { japaneseValidation } from '../lib/validation'
 
 type Props = {
   // 指定時は編集モード(PUT)、未指定時は新規作成モード(POST)。
@@ -57,7 +56,7 @@ export function RunForm({ editingRun, onSaved, onCancel }: Props) {
   }
 
   return (
-    <form className="run-form" onSubmit={handleSubmit} {...japaneseValidation}>
+    <form className="run-form" onSubmit={handleSubmit}>
       <label>
         距離(km)
         <input

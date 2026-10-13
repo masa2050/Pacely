@@ -275,12 +275,14 @@ UI/UX改善(フェーズ9)より先にこちらをやる。Pacelyの中核はAI�
 **進捗**: 全体的な配色の統一は対応済み(docs/adr/026、PR #18)。ティール系に統一し、色・角丸・影を
 `index.css`のトークンで一元管理した。続けて以下も対応済み(`feature/phase9-3-display-fixes`):
 - 時間入力の「秒」の折り返し: 入力欄を折り返さず縮めて1行に収めた(App.css)
-- 英語バリデーション: `lib/validation.ts`の`japaneseValidation`を各`<form>`に付け、`invalid`イベントを
-  フォーム単位で捕捉して`setCustomValidity`で日本語に差し替える
+- 英語バリデーション: `lib/validation.ts`の`installJapaneseValidation`を`main.tsx`で一度呼び、
+  documentのキャプチャ段階で`invalid`を受けて`setCustomValidity`で日本語に差し替える
+  (新しいフォームにも設定なしで効く)
 - 記録一覧の日付: 同じ年なら`9/24`、違う年は`2025/12/31`(`lib/date.ts`の`formatShortDate`)
 - 追加要望: 進捗確認に「本番まであと◯日」を表示(`daysUntil`、BE変更なし)
 
-挨拶メッセージの見直しは未着手(位置・文言・文章量の方針から相談する)。
+- 挨拶: 日付(小さなラベル)・あいさつ+名前・時間帯の一言の構成に変更(`Greeting.tsx`、1分ごとに更新)
+- 進捗確認の残り日数: 目標日を過ぎている場合は目標設定カードへのリンクを表示
 
 - 全体的な配色の設定・統一
 - 時間帯によって変わる挨拶メッセージの位置・文言・文章量を見直す
