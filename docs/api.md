@@ -2,7 +2,7 @@
 
 ## 1. 設計方針
 
-- REST APIとする(既存のインターン経験でREST/gRPCの違いを説明できるため、あえてRESTを採用する判断も含めて語れるようにする)
+- REST APIとする(理由は docs/adr/028-rest-api.md)
 - 認証はJWT(Supabase Auth発行)をAuthorizationヘッダーで受け取り、全エンドポイントで検証する(ヘルスチェック等を除く)
 - レスポンスはJSON形式で統一
 - AI提案の生成トリガーは**GET /advices/latest 呼び出し時にチェックする**(記録追加時ではなく取得時)。これにより`POST /runs`はDB書き込みのみのシンプルな処理に保てる
