@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -19,6 +20,12 @@ const minRunsForAdvice = 3
 // adviceFreshWindow は「前回生成から24時間以内なら再生成しない」の閾値
 // (docs/api.md 3.、docs/adr/004)。
 const adviceFreshWindow = 24 * time.Hour
+
+// adviceLeaseDuration は生成の権利(docs/adr/031)の有効期間。生成にかかる最悪の時間
+// (天候API 10秒 + Gemini全体で90秒 = 約100秒)より長くする。短いと、生成の途中で
+// 権利が切れて別のリクエストが取れてしまう。長すぎても、サーバーが生成中に落ちたときに
+// 次の生成まで待たされる時間が延びるだけなので、余裕を持たせて3分とした。
+const adviceLeaseDuration = 3 * time.Minute
 
 // recentRunsForAdvicePrompt はAIプロンプトに渡す「直近の記録」の件数。
 // docs/adr/011で進捗計算に使った直近5件の考え方をそのまま再利用する
@@ -55,6 +62,9 @@ const (
 	AdviceStatusNeedsMoreRuns AdviceStatus = "needs_more_runs"
 	// AdviceStatusNeedsActiveGoal は有効な目標が無い状態。
 	AdviceStatusNeedsActiveGoal AdviceStatus = "needs_active_goal"
+	// AdviceStatusGenerating は、別のリクエストがこのユーザーの提案を生成中の状態
+	// (docs/adr/031)。adviceは含まない。FEは少し待ってから取り直す。
+	AdviceStatusGenerating AdviceStatus = "generating"
 )
 
 // LatestAdviceResult は GET /advices/latest のレスポンス本体。
@@ -107,21 +117,72 @@ func (s *AdviceService) GetLatest(ctx context.Context, userID string) (*LatestAd
 		return nil, err
 	}
 
-	latest, err := s.repo.GetLatestByUser(ctx, userID)
-	if err != nil && !errors.Is(err, repository.ErrNotFound) {
+	ready := func(advice *model.Advice) *LatestAdviceResult {
+		return &LatestAdviceResult{Status: AdviceStatusReady, Advice: advice, RunsCount: runsCount, MinRunsRequired: minRunsForAdvice}
+	}
+
+	fresh, err := s.latestIfFresh(ctx, userID)
+	if err != nil {
 		return nil, err
 	}
-	needsGenerate := errors.Is(err, repository.ErrNotFound) || time.Since(latest.GeneratedAt) >= adviceFreshWindow
+	if fresh != nil {
+		return ready(fresh), nil
+	}
 
-	if !needsGenerate {
-		return &LatestAdviceResult{Status: AdviceStatusReady, Advice: latest, RunsCount: runsCount, MinRunsRequired: minRunsForAdvice}, nil
+	// ここから先は生成(10〜30秒)に入る。「確認」と「保存」の間に別のリクエストが割り込んで
+	// 二重に生成しないよう、生成する権利を取れた1件だけが進む(docs/adr/031)。
+	acquired, err := s.repo.TryAcquireGenerationLease(ctx, userID, adviceLeaseDuration)
+	if err != nil {
+		return nil, err
+	}
+	if !acquired {
+		return &LatestAdviceResult{Status: AdviceStatusGenerating, RunsCount: runsCount, MinRunsRequired: minRunsForAdvice}, nil
+	}
+	defer s.releaseGenerationLease(ctx, userID)
+
+	// 権利を取る間に、別のリクエストが生成を終えているかもしれない。上の確認は権利を取る前の
+	// 古い状態なので、権利を持った状態でもう一度確認する(double-checked locking)。
+	fresh, err = s.latestIfFresh(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if fresh != nil {
+		return ready(fresh), nil
 	}
 
 	generated, err := s.generate(ctx, userID, goal)
 	if err != nil {
 		return nil, err
 	}
-	return &LatestAdviceResult{Status: AdviceStatusReady, Advice: generated, RunsCount: runsCount, MinRunsRequired: minRunsForAdvice}, nil
+	return ready(generated), nil
+}
+
+// latestIfFresh は、前回の生成から24時間以内の最新の提案を返す。
+// 提案が無い、または24時間以上経っている(=生成が必要)場合は(nil, nil)を返す。
+func (s *AdviceService) latestIfFresh(ctx context.Context, userID string) (*model.Advice, error) {
+	latest, err := s.repo.GetLatestByUser(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if time.Since(latest.GeneratedAt) >= adviceFreshWindow {
+		return nil, nil
+	}
+	return latest, nil
+}
+
+// releaseGenerationLease は生成の権利を返す。成功・失敗のどちらでも呼ぶ。
+// ブラウザが切断されてリクエストのctxが中断されても確実に返せるよう、ctxの中断を引き継がない
+// 別のctxで実行する。返し損ねても期限(adviceLeaseDuration)が過ぎれば解放されるため、
+// 失敗はログに残すだけで、ユーザーへのレスポンスは変えない。
+func (s *AdviceService) releaseGenerationLease(ctx context.Context, userID string) {
+	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := s.repo.ReleaseGenerationLease(releaseCtx, userID); err != nil {
+		log.Printf("advice: failed to release generation lease (user %s): %v", userID, err)
+	}
 }
 
 // generate は天候取得→AI呼び出し→DB保存までを実行する(docs/api.md 3.のa〜d)。

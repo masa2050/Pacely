@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/url"
 	"os"
 	"sync"
@@ -17,18 +18,22 @@ import (
 
 // countingGenerator はAI呼び出しの回数を数えるダミー。実際のGeminiは呼ばない。
 // delayは「AIの応答待ち(本物は10〜30秒)」の代わりで、この間に別のリクエストが
-// 割り込める状態を作る。
+// 割り込める状態を作る。failFirstがtrueなら、最初の1回だけ失敗する。
 type countingGenerator struct {
-	calls atomic.Int32
-	delay time.Duration
+	calls     atomic.Int32
+	delay     time.Duration
+	failFirst bool
 }
 
 func (g *countingGenerator) GenerateAdvice(ctx context.Context, _ AdvicePromptInput) (AdviceGeneration, error) {
-	g.calls.Add(1)
+	n := g.calls.Add(1)
 	select {
 	case <-time.After(g.delay):
 	case <-ctx.Done():
 		return AdviceGeneration{}, ctx.Err()
+	}
+	if g.failFirst && n == 1 {
+		return AdviceGeneration{}, ErrExternalAPI
 	}
 	return AdviceGeneration{
 		AdviceText: "テスト用の提案",
@@ -65,20 +70,19 @@ func newTestPool(t *testing.T) *pgxpool.Pool {
 	return pool
 }
 
-// 同じユーザーの GetLatest が同時に何度呼ばれても、AIの呼び出しとadvicesへの保存は
-// 1回だけであることを確認する(docs/implementation-plan.md 9-6 課題A)。
-// 排他制御が無い現状では、全リクエストが「提案なし」と判断して全員が生成する。
-func TestGetLatestConcurrentRequestsGenerateOnce(t *testing.T) {
+// newAdviceFixture は「記録3件・有効な目標あり・提案なし」のテスト専用ユーザーと、
+// そのユーザーに対するAdviceServiceを作る。終了時にユーザーを削除すれば、
+// 子テーブルはON DELETE CASCADEで消える。
+func newAdviceFixture(t *testing.T, gen AdviceGenerator) (svc *AdviceService, pool *pgxpool.Pool, userID string) {
+	t.Helper()
 	ctx := context.Background()
-	pool := newTestPool(t)
+	pool = newTestPool(t)
 
 	userRepo := repository.NewUserRepository(pool)
 	runRepo := repository.NewRunRepository(pool)
 	goalRepo := repository.NewGoalRepository(pool)
 	adviceRepo := repository.NewAdviceRepository(pool)
 
-	// テスト専用のユーザーを作る。終了時に削除すれば、子テーブルはON DELETE CASCADEで消える。
-	var userID string
 	if err := pool.QueryRow(ctx, `SELECT gen_random_uuid()::text`).Scan(&userID); err != nil {
 		t.Fatalf("user id の採番に失敗: %v", err)
 	}
@@ -104,38 +108,89 @@ func TestGetLatestConcurrentRequestsGenerateOnce(t *testing.T) {
 		t.Fatalf("目標作成に失敗: %v", err)
 	}
 
+	svc = NewAdviceService(adviceRepo, NewUserService(userRepo, "", ""), runRepo, goalRepo, noWeather{}, gen)
+	return svc, pool, userID
+}
+
+func countAdvices(t *testing.T, pool *pgxpool.Pool, userID string) int {
+	t.Helper()
+	var n int
+	if err := pool.QueryRow(context.Background(), `SELECT count(*) FROM advices WHERE user_id = $1`, userID).Scan(&n); err != nil {
+		t.Fatalf("advicesの件数取得に失敗: %v", err)
+	}
+	return n
+}
+
+// 同じユーザーの GetLatest が同時に何度呼ばれても、AIの呼び出しとadvicesへの保存は
+// 1回だけであることを確認する(docs/implementation-plan.md 9-6 課題A、docs/adr/031)。
+// 排他制御が無かった頃は、全リクエストが「提案なし」と判断して全員が生成していた
+// (修正前の実測: AI呼び出し5回・保存5件)。
+func TestGetLatestConcurrentRequestsGenerateOnce(t *testing.T) {
+	ctx := context.Background()
 	gen := &countingGenerator{delay: 500 * time.Millisecond}
-	svc := NewAdviceService(adviceRepo, NewUserService(userRepo, "", ""), runRepo, goalRepo, noWeather{}, gen)
+	svc, pool, userID := newAdviceFixture(t, gen)
 
 	const requests = 5
 	var wg sync.WaitGroup
 	start := make(chan struct{})
+	statuses := make(chan AdviceStatus, requests)
 	errs := make(chan error, requests)
 	for i := 0; i < requests; i++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			<-start // 全員が揃ってから一斉に呼ぶ(複数タブの同時操作の再現)
-			if _, err := svc.GetLatest(ctx, userID); err != nil {
+			res, err := svc.GetLatest(ctx, userID)
+			if err != nil {
 				errs <- err
+				return
 			}
+			statuses <- res.Status
 		}()
 	}
 	close(start)
 	wg.Wait()
 	close(errs)
+	close(statuses)
 	for err := range errs {
 		t.Errorf("GetLatest がエラーを返した: %v", err)
 	}
 
-	var saved int
-	if err := pool.QueryRow(ctx, `SELECT count(*) FROM advices WHERE user_id = $1`, userID).Scan(&saved); err != nil {
-		t.Fatalf("advicesの件数取得に失敗: %v", err)
-	}
 	if got := gen.calls.Load(); got != 1 {
 		t.Errorf("AIの呼び出し回数 = %d, 期待値 1", got)
 	}
-	if saved != 1 {
+	if saved := countAdvices(t, pool, userID); saved != 1 {
+		t.Errorf("advicesの保存件数 = %d, 期待値 1", saved)
+	}
+	// 生成できなかったリクエストは、エラーではなく「生成中」か、完成済みの提案を受け取る。
+	for st := range statuses {
+		if st != AdviceStatusReady && st != AdviceStatusGenerating {
+			t.Errorf("想定外のstatus: %q", st)
+		}
+	}
+}
+
+// 生成に失敗しても生成の権利が戻り、ユーザーが再読み込みですぐにやり直せることを確認する。
+// 戻らないと、権利の期限(3分)が切れるまで「生成中」のままになってしまう。
+func TestGetLatestReleasesLeaseWhenGenerationFails(t *testing.T) {
+	ctx := context.Background()
+	gen := &countingGenerator{delay: 10 * time.Millisecond, failFirst: true}
+	svc, pool, userID := newAdviceFixture(t, gen)
+
+	if _, err := svc.GetLatest(ctx, userID); !errors.Is(err, ErrExternalAPI) {
+		t.Fatalf("1回目: ErrExternalAPI を期待したが %v", err)
+	}
+	res, err := svc.GetLatest(ctx, userID)
+	if err != nil {
+		t.Fatalf("2回目がエラー: %v", err)
+	}
+	if res.Status != AdviceStatusReady || res.Advice == nil {
+		t.Errorf("2回目: status=%q advice=%v, ready と提案を期待", res.Status, res.Advice)
+	}
+	if got := gen.calls.Load(); got != 2 {
+		t.Errorf("AIの呼び出し回数 = %d, 期待値 2", got)
+	}
+	if saved := countAdvices(t, pool, userID); saved != 1 {
 		t.Errorf("advicesの保存件数 = %d, 期待値 1", saved)
 	}
 }

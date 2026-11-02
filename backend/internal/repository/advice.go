@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -43,6 +44,31 @@ func (r *AdviceRepository) Create(ctx context.Context, advice *model.Advice) (*m
 		 RETURNING `+adviceColumns,
 		advice.UserID, advice.GoalID, advice.AdviceText, advice.NextMenu, advice.WeatherContext)
 	return scanAdvice(row)
+}
+
+// TryAcquireGenerationLease は「今からleaseの間、このユーザーのAI提案を生成する権利」を
+// 取りにいく(docs/adr/031)。取得できたらtrue、他のリクエストが生成中ならfalse。
+// 「空いているか確認する」と「予約を書き込む」を1文のUPDATEで同時に行うのが要点で、
+// 2つのリクエストが同時に来ても、PostgreSQLが行ロックで順番に処理し、先に来た方だけが
+// 1行更新に成功する。確認と書き込みを別のSQLに分けると、その隙間に割り込まれて
+// 二重に取得できてしまう(check-then-act競合)。
+// 権利は期限付きなので、生成の途中でサーバーが落ちても、期限が過ぎれば別のリクエストが取れる。
+func (r *AdviceRepository) TryAcquireGenerationLease(ctx context.Context, userID string, lease time.Duration) (bool, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE users
+		 SET advice_lock_until = now() + make_interval(secs => $2)
+		 WHERE id = $1 AND (advice_lock_until IS NULL OR advice_lock_until < now())`,
+		userID, lease.Seconds())
+	if err != nil {
+		return false, err
+	}
+	return tag.RowsAffected() == 1, nil
+}
+
+// ReleaseGenerationLease は生成の権利を返す(期限を待たずに、次のリクエストが取れるようにする)。
+func (r *AdviceRepository) ReleaseGenerationLease(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE users SET advice_lock_until = NULL WHERE id = $1`, userID)
+	return err
 }
 
 // GetLatestByUser は最新のadviceを1件取得する(docs/database.md 3.4)。
