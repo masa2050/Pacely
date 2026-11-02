@@ -46,6 +46,8 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
   // (従来どおり空の状態から表示し、ちらつきを増やさない)。
   const [runsReloading, setRunsReloading] = useState(false)
   const [goalsReloading, setGoalsReloading] = useState(false)
+  // 記録・目標の初回読み込みが終わったか。AI提案は、これが終わってから取りにいく。
+  const [initialLoaded, setInitialLoaded] = useState(false)
 
   // フェーズ9-4: 取得処理をカード単位の関数に切り出し、初回(useEffect)と
   // 失敗時の再読み込み(ErrorRetry)の両方から呼べるようにした。以前はuseEffect内に
@@ -99,8 +101,10 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
 
   useEffect(() => {
     loadMe()
-    loadRuns()
-    loadGoals()
+    // 記録と目標が両方届いてからAI提案を取りにいく(docs/adr/031)。以前は届くたびにAdviceViewの
+    // keyが変わって作り直され、GET /advices/latestが最大3回送られていた。どちらかが失敗しても
+    // loadRuns/loadGoalsはresolveするので、finallyで必ず読み込み完了にできる。
+    Promise.all([loadRuns(), loadGoals()]).finally(() => setInitialLoaded(true))
   }, [])
 
   return (
@@ -198,12 +202,18 @@ export function Dashboard({ session, onSettingsClick, onHistoryClick }: Props) {
           <h2>AI提案</h2>
           {/* activeGoal・runsの変化に応じて再取得したいので、Progressと同様keyで再マウントする。
               ただし取得自体は「前回生成から24時間以内ならキャッシュを返す」ため、
-              毎回AIが呼ばれるわけではない(docs/adr/004)。 */}
-          <AdviceView
-            key={`${activeGoal?.id ?? 'none'}-${runs.length}`}
-            onHistoryClick={onHistoryClick}
-            canGenerate={runs.length >= MIN_RUNS_FOR_ADVICE && activeGoal !== null}
-          />
+              毎回AIが呼ばれるわけではない(docs/adr/004)。
+              初回読み込みが終わるまでは表示しない。読み込み中にrunsとactiveGoalが順に届くと
+              keyが変わり、その都度取得が走ってしまうため(docs/adr/031)。 */}
+          {initialLoaded ? (
+            <AdviceView
+              key={`${activeGoal?.id ?? 'none'}-${runs.length}`}
+              onHistoryClick={onHistoryClick}
+              canGenerate={runs.length >= MIN_RUNS_FOR_ADVICE && activeGoal !== null}
+            />
+          ) : (
+            <p>AI提案を確認中...</p>
+          )}
         </div>
       </div>
     </div>
