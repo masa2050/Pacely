@@ -27,6 +27,10 @@ const adviceFreshWindow = 24 * time.Hour
 // 次の生成まで待たされる時間が延びるだけなので、余裕を持たせて3分とした。
 const adviceLeaseDuration = 3 * time.Minute
 
+// adviceGenerationTimeout は、権利を取ってから生成を終えるまでの上限。権利の期限より短くして、
+// 生成が長引いても、権利が切れる前に必ず打ち切る(外部APIの最悪値の約100秒より長い)。
+const adviceGenerationTimeout = adviceLeaseDuration - 30*time.Second
+
 // recentRunsForAdvicePrompt はAIプロンプトに渡す「直近の記録」の件数。
 // docs/adr/011で進捗計算に使った直近5件の考え方をそのまま再利用する
 // (「直近の傾向」を渡すという目的が共通のため)。
@@ -131,18 +135,29 @@ func (s *AdviceService) GetLatest(ctx context.Context, userID string) (*LatestAd
 
 	// ここから先は生成(10〜30秒)に入る。「確認」と「保存」の間に別のリクエストが割り込んで
 	// 二重に生成しないよう、生成する権利を取れた1件だけが進む(docs/adr/031)。
-	acquired, err := s.repo.TryAcquireGenerationLease(ctx, userID, adviceLeaseDuration)
+	// 権利を取るUPDATEは、「他のリクエストが生成中」でも「usersの行が無い」でも0行になり、
+	// 区別できない。行が無いのに generating を返し続けないよう、先に行の存在を保証する
+	// (runsの保存前にusersの行を作るdocs/adr/008と同じ方針)。
+	if _, err := s.userService.GetOrCreateMe(ctx, userID); err != nil {
+		return nil, err
+	}
+	lease, err := s.repo.TryAcquireGenerationLease(ctx, userID, adviceLeaseDuration)
 	if err != nil {
 		return nil, err
 	}
-	if !acquired {
+	if lease == nil {
 		return &LatestAdviceResult{Status: AdviceStatusGenerating, RunsCount: runsCount, MinRunsRequired: minRunsForAdvice}, nil
 	}
-	defer s.releaseGenerationLease(ctx, userID)
+	defer s.releaseGenerationLease(ctx, lease)
+
+	// 生成全体(DBの読み書き・天候API・AI API)が権利の期限に収まるよう、上限を付ける。
+	// 収まらないと、生成の途中で権利が切れて別のリクエストが取れてしまい、二重生成になる。
+	genCtx, cancel := context.WithTimeout(ctx, adviceGenerationTimeout)
+	defer cancel()
 
 	// 権利を取る間に、別のリクエストが生成を終えているかもしれない。上の確認は権利を取る前の
 	// 古い状態なので、権利を持った状態でもう一度確認する(double-checked locking)。
-	fresh, err = s.latestIfFresh(ctx, userID)
+	fresh, err = s.latestIfFresh(genCtx, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +165,7 @@ func (s *AdviceService) GetLatest(ctx context.Context, userID string) (*LatestAd
 		return ready(fresh), nil
 	}
 
-	generated, err := s.generate(ctx, userID, goal)
+	generated, err := s.generate(genCtx, userID, goal)
 	if err != nil {
 		return nil, err
 	}
@@ -177,11 +192,11 @@ func (s *AdviceService) latestIfFresh(ctx context.Context, userID string) (*mode
 // ブラウザが切断されてリクエストのctxが中断されても確実に返せるよう、ctxの中断を引き継がない
 // 別のctxで実行する。返し損ねても期限(adviceLeaseDuration)が過ぎれば解放されるため、
 // 失敗はログに残すだけで、ユーザーへのレスポンスは変えない。
-func (s *AdviceService) releaseGenerationLease(ctx context.Context, userID string) {
+func (s *AdviceService) releaseGenerationLease(ctx context.Context, lease *repository.GenerationLease) {
 	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if err := s.repo.ReleaseGenerationLease(releaseCtx, userID); err != nil {
-		log.Printf("advice: failed to release generation lease (user %s): %v", userID, err)
+	if err := s.repo.ReleaseGenerationLease(releaseCtx, lease); err != nil {
+		log.Printf("advice: failed to release generation lease: %v", err)
 	}
 }
 

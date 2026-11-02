@@ -194,3 +194,45 @@ func TestGetLatestReleasesLeaseWhenGenerationFails(t *testing.T) {
 		t.Errorf("advicesの保存件数 = %d, 期待値 1", saved)
 	}
 }
+
+// 権利は、他のリクエストが持っている間は取れず、期限が切れれば取れる。
+// また、期限が切れて別のリクエストが新しく取った権利を、古い持ち主が返しても消えない
+// (docs/adr/031。レビュー指摘: 無条件に消すと、生成中のリクエストの権利まで消えて二重生成になる)。
+func TestGenerationLeaseExpiryAndOwnership(t *testing.T) {
+	ctx := context.Background()
+	_, pool, userID := newAdviceFixture(t, &countingGenerator{})
+	repo := repository.NewAdviceRepository(pool)
+
+	first, err := repo.TryAcquireGenerationLease(ctx, userID, time.Minute)
+	if err != nil || first == nil {
+		t.Fatalf("1回目は取れるはず: lease=%v err=%v", first, err)
+	}
+	if second, err := repo.TryAcquireGenerationLease(ctx, userID, time.Minute); err != nil || second != nil {
+		t.Fatalf("持ち主がいる間は取れないはず: lease=%v err=%v", second, err)
+	}
+
+	// 期限切れを再現するため、期限を過去に書き換える(本来は時間が経って切れる)。
+	if _, err := pool.Exec(ctx, `UPDATE users SET advice_lock_until = now() - interval '1 second' WHERE id = $1`, userID); err != nil {
+		t.Fatalf("期限の書き換えに失敗: %v", err)
+	}
+	second, err := repo.TryAcquireGenerationLease(ctx, userID, time.Minute)
+	if err != nil || second == nil {
+		t.Fatalf("期限切れなら別のリクエストが取れるはず: lease=%v err=%v", second, err)
+	}
+
+	// 期限切れの古い持ち主(first)が返しても、新しい持ち主(second)の権利は消えない。
+	if err := repo.ReleaseGenerationLease(ctx, first); err != nil {
+		t.Fatalf("古い持ち主の解放に失敗: %v", err)
+	}
+	if third, err := repo.TryAcquireGenerationLease(ctx, userID, time.Minute); err != nil || third != nil {
+		t.Fatalf("古い持ち主の解放で、新しい権利が消えている: lease=%v err=%v", third, err)
+	}
+
+	// 本人が返せば、次のリクエストが取れる。
+	if err := repo.ReleaseGenerationLease(ctx, second); err != nil {
+		t.Fatalf("本人の解放に失敗: %v", err)
+	}
+	if again, err := repo.TryAcquireGenerationLease(ctx, userID, time.Minute); err != nil || again == nil {
+		t.Fatalf("本人が返したあとは取れるはず: lease=%v err=%v", again, err)
+	}
+}

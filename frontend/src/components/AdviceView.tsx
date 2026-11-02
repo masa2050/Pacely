@@ -50,44 +50,53 @@ export function AdviceView({ onHistoryClick, canGenerate }: Props) {
   // 結果が出ていないので読み込み中のまま、GENERATING_POLL_MS後に取り直す。取り直しは
   // 最大GENERATING_MAX_POLLS回までとし、超えたら再読み込みボタン付きのエラーにする。
   const pollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  // 画面を離れた(再マウントされた)後に、遅れて返ってきた応答でstateを触らないための目印。
-  const active = useRef(true)
+  // 取得の「世代番号」。start()のたびに1つ進め、画面を離れるときも進める。load()は自分が
+  // 始まったときの番号を持ち回り、応答が返った時点で番号が違えば(=もう古い取得なら)何もしない。
+  // StrictModeの2回マウントや、再読み込みで取得をやり直したときに、先に始めた取得の応答や
+  // ポーリングが生き残って並走するのを防ぐ(/code-review指摘)。
+  const generation = useRef(0)
 
-  function load(attempt = 0) {
+  function load(myGeneration: number, attempt = 0) {
     getLatestAdvice()
       .then((res) => {
-        if (!active.current) return
+        if (myGeneration !== generation.current) return
         if (res.status === 'generating') {
           if (attempt >= GENERATING_MAX_POLLS) {
             setError('AI提案の生成に時間がかかっています。しばらくしてから再読み込みしてください')
             setLoading(false)
             return
           }
-          pollTimer.current = setTimeout(() => load(attempt + 1), GENERATING_POLL_MS)
+          pollTimer.current = setTimeout(() => load(myGeneration, attempt + 1), GENERATING_POLL_MS)
           return
         }
         setResult(res)
         setLoading(false)
       })
       .catch((err) => {
-        if (!active.current) return
+        if (myGeneration !== generation.current) return
         setError(toUserMessage(err))
         setLoading(false)
       })
+  }
+
+  // 新しい取得を始める。それまでの取得(待機中のタイマーと、まだ返っていない応答)は無効にする。
+  function start() {
+    generation.current += 1
+    clearTimeout(pollTimer.current)
+    load(generation.current)
   }
 
   function fetchLatest() {
     setLoading(true)
     setError(null)
     setSlow(false)
-    load()
+    start()
   }
 
   useEffect(() => {
-    active.current = true
-    load()
+    start()
     return () => {
-      active.current = false
+      generation.current += 1
       clearTimeout(pollTimer.current)
     }
   }, [])
