@@ -74,13 +74,27 @@
    - adviceが1件も存在しない、または
    - 最新adviceのgenerated_atから24時間以上経過している
    場合のみ、以下を実行:
-   a. 直近の記録・現在の目標をDBから取得
-   b. users.regionをもとに天候APIを呼び出す
-   c. Claude APIにプロンプトを投げてアドバイス・practice menuを生成
-   d. 結果をadvicesテーブルに保存
-   e. 保存した内容をレスポンスとして返す
+   a. 生成する権利(users.advice_lock_until)を条件付きUPDATEで取る(docs/adr/031)。
+      取れなければ(他のリクエストが生成中)、AIを呼ばずに status: "generating" を返して終了
+   b. 権利を取れたら、最新adviceをもう一度確認する。待つ間に別のリクエストが生成を終えて
+      24時間以内になっていれば、生成せずにそれを返す(権利は返す)
+   c. 直近の記録・現在の目標をDBから取得
+   d. users.regionをもとに天候APIを呼び出す
+   e. Gemini APIにプロンプトを投げてアドバイス・practice menuを生成
+   f. 結果をadvicesテーブルに保存
+   g. 権利を返す(成功・失敗のどちらでも。期限は3分で、返し損ねても自動で切れる)
+   h. 保存した内容をレスポンスとして返す
 5. 上記条件に該当しない場合は、既存の最新adviceレコードをそのまま返す(AI APIは呼ばない)
 ```
+
+レスポンスの`status`は次の4つ。`generating`のときは`advice`を含まず、FEは数秒後に取り直す。
+
+| status | 意味 |
+| ------ | ---- |
+| ready | `advice`を返せる(生成直後またはキャッシュ) |
+| needs_more_runs | 記録がmin_runs_required件未満。AIは呼んでいない |
+| needs_active_goal | 有効な目標が無い。AIは呼んでいない |
+| generating | 同じユーザーの別のリクエストが生成中(docs/adr/031) |
 
 - この判定ロジックはservice層に置き、handlerからはシンプルに呼び出すだけにする
 - GETリクエストなのに副作用(DB書き込み・外部API呼び出し)が発生する点は一般的なREST設計としては例外的だが、個人開発のシンプルさとAPI呼び出し回数の最小化を優先した意図的な設計判断として、CLAUDE.md・実装時のコメントに明記しておく
