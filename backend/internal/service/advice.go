@@ -21,6 +21,13 @@ const minRunsForAdvice = 3
 // (docs/api.md 3.、docs/adr/004)。
 const adviceFreshWindow = 24 * time.Hour
 
+// maxAdviceGenerationsPerWindow は、adviceFreshWindow(24時間)の間に1ユーザーが生成できる
+// 提案の上限(docs/adr/034)。目標を切り替えると24時間以内でも再生成するため、それを繰り返して
+// AI APIの枠を使い切られないよう、回数で上限を保証する。通常の1回に、目標の作り直し
+// (入力の間違いの修正など)2回分の余裕を足して3回とした。待ち時間(クールダウン)ではなく
+// 回数にしたのは、1〜2回の作り直しなら待たずに新しい目標向けの提案を出せるようにするため。
+const maxAdviceGenerationsPerWindow = 3
+
 // adviceLeaseDuration は生成の権利(docs/adr/031)の有効期間。生成にかかる最悪の時間
 // (天候API 10秒 + Gemini全体で90秒 = 約100秒)より長くする。短いと、生成の途中で
 // 権利が切れて別のリクエストが取れてしまう。長すぎても、サーバーが生成中に落ちたときに
@@ -125,7 +132,7 @@ func (s *AdviceService) GetLatest(ctx context.Context, userID string) (*LatestAd
 		return &LatestAdviceResult{Status: AdviceStatusReady, Advice: advice, RunsCount: runsCount, MinRunsRequired: minRunsForAdvice}
 	}
 
-	fresh, err := s.latestIfFresh(ctx, userID)
+	fresh, err := s.latestIfFresh(ctx, userID, goal.ID)
 	if err != nil {
 		return nil, err
 	}
@@ -157,12 +164,28 @@ func (s *AdviceService) GetLatest(ctx context.Context, userID string) (*LatestAd
 
 	// 権利を取る間に、別のリクエストが生成を終えているかもしれない。上の確認は権利を取る前の
 	// 古い状態なので、権利を持った状態でもう一度確認する(double-checked locking)。
-	fresh, err = s.latestIfFresh(genCtx, userID)
+	fresh, err = s.latestIfFresh(genCtx, userID, goal.ID)
 	if err != nil {
 		return nil, err
 	}
 	if fresh != nil {
 		return ready(fresh), nil
+	}
+
+	// 24時間の上限回数に達していたら、目標が変わっていても生成せず、直前の提案を返す
+	// (docs/adr/034)。前の目標向けの提案になりうるが、それは上限まで作り直した場合だけである。
+	// 数えるのは権利を取った後にする。取る前に数えると、数えてから保存するまでの間に
+	// 別のリクエストが割り込み、上限を超えて生成できてしまう(docs/adr/031と同じ競合)。
+	generatedCount, err := s.repo.CountGeneratedSince(genCtx, userID, adviceFreshWindow)
+	if err != nil {
+		return nil, err
+	}
+	if generatedCount >= maxAdviceGenerationsPerWindow {
+		latest, err := s.repo.GetLatestByUser(genCtx, userID)
+		if err != nil {
+			return nil, err
+		}
+		return ready(latest), nil
 	}
 
 	generated, err := s.generate(genCtx, userID, goal)
@@ -172,9 +195,16 @@ func (s *AdviceService) GetLatest(ctx context.Context, userID string) (*LatestAd
 	return ready(generated), nil
 }
 
-// latestIfFresh は、前回の生成から24時間以内の最新の提案を返す。
-// 提案が無い、または24時間以上経っている(=生成が必要)場合は(nil, nil)を返す。
-func (s *AdviceService) latestIfFresh(ctx context.Context, userID string) (*model.Advice, error) {
+// latestIfFresh は、現在の目標(goalID)向けで、前回の生成から24時間以内の最新の提案を返す。
+// 次のいずれかの場合(=生成が必要)は(nil, nil)を返す。
+//   - 提案が無い
+//   - 24時間以上経っている
+//   - 最新の提案のgoal_idが現在の目標と異なる、またはNULL(docs/adr/034)。
+//     目標を切り替えた直後に、放棄済みの目標向けの提案を返さないため
+//
+// 権利を取る前の確認と取った後の再確認の両方から呼ばれるので、goalIDを必須の引数にして、
+// どちらか一方だけ条件が抜ける事故を防いでいる。
+func (s *AdviceService) latestIfFresh(ctx context.Context, userID, goalID string) (*model.Advice, error) {
 	latest, err := s.repo.GetLatestByUser(ctx, userID)
 	if err != nil {
 		if errors.Is(err, repository.ErrNotFound) {
@@ -183,6 +213,10 @@ func (s *AdviceService) latestIfFresh(ctx context.Context, userID string) (*mode
 		return nil, err
 	}
 	if time.Since(latest.GeneratedAt) >= adviceFreshWindow {
+		return nil, nil
+	}
+	// goal_idがNULLの提案は、どの目標向けか確認できないので「違う」扱いにして再生成する。
+	if latest.GoalID == nil || *latest.GoalID != goalID {
 		return nil, nil
 	}
 	return latest, nil

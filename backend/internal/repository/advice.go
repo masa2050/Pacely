@@ -99,6 +99,17 @@ func (r *AdviceRepository) GetLatestByUser(ctx context.Context, userID string) (
 	return scanAdvice(row)
 }
 
+// CountGeneratedSince は、直近window以内に生成された提案の件数を返す(docs/adr/034)。
+// 目標の切り替えによる再生成に、1ユーザーあたりの回数上限をかけるために使う。
+// 「直近」の基準はアプリのサーバーではなくDBのnow()に揃える(generated_atもDBのnow()で入るため)。
+func (r *AdviceRepository) CountGeneratedSince(ctx context.Context, userID string, window time.Duration) (int, error) {
+	var n int
+	err := r.pool.QueryRow(ctx,
+		`SELECT count(*) FROM advices WHERE user_id = $1 AND generated_at > now() - make_interval(secs => $2)`,
+		userID, window.Seconds()).Scan(&n)
+	return n, err
+}
+
 // scanAdvices はrows.Next()のループを1か所にまとめ、ListByUser/ListRecentByUserで
 // 重複させない(/code-review指摘)。
 func scanAdvices(rows pgx.Rows) ([]model.Advice, error) {
