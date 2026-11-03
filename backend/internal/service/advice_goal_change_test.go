@@ -104,6 +104,17 @@ func TestGetLatestCapsRegenerationsPerWindow(t *testing.T) {
 	if saved := countAdvices(t, pool, userID); saved != maxAdviceGenerationsPerWindow {
 		t.Errorf("advicesの保存件数 = %d, 期待値 %d", saved, maxAdviceGenerationsPerWindow)
 	}
+
+	// 上限に達していれば、別のリクエストが権利を持っていても、権利を取りにいかずに直前の提案を返す
+	// (生成しないのに「生成中」を返してFEにポーリングさせない)。
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE users SET advice_lock_until = now() + interval '1 minute' WHERE id = $1`, userID); err != nil {
+		t.Fatalf("権利の書き込みに失敗: %v", err)
+	}
+	res, err = svc.GetLatest(ctx, userID)
+	if err != nil || res.Status != AdviceStatusReady || res.Advice == nil || res.Advice.ID != last.ID {
+		t.Errorf("上限到達かつ別のリクエストが生成中: res=%v err=%v, 直前の提案のreadyを期待", res, err)
+	}
 }
 
 // goal_idがNULLの提案は、どの目標向けか確認できないので、24時間以内でも再生成する(docs/adr/034)。
@@ -128,9 +139,11 @@ func TestGetLatestRegeneratesWhenAdviceGoalIsNull(t *testing.T) {
 	}
 }
 
-// 権利を取った後の再確認(double-checked locking)でも、同じ条件が効くことを確認する。
-// 権利を取る前と後の確認は同じlatestIfFreshを通るので、これを直接呼んで検証する。
-// 片方だけ条件が抜けていると、並行したリクエストが古い目標向けの提案を「新しい」と返してしまう。
+// latestIfFreshが目標の違いを見ることを確認する。権利を取る前の確認と、取った後の再確認は
+// どちらもこの関数を通る。ただしこのテストは関数を直接呼ぶだけで、GetLatestの2か所の呼び出しが
+// 正しく目標IDを渡していることまでは保証しない(再確認側だけを通る状況を作るには、リース取得の
+// 最中に別のリクエストが生成を終える割り込みが要り、決定的に再現するのが難しい)。
+// 呼び出し側は、goalIDが必須の引数であることと、レビューで守る。
 func TestLatestIfFreshChecksGoal(t *testing.T) {
 	ctx := context.Background()
 	gen := &countingGenerator{delay: 10 * time.Millisecond}

@@ -140,6 +140,18 @@ func (s *AdviceService) GetLatest(ctx context.Context, userID string) (*LatestAd
 		return ready(fresh), nil
 	}
 
+	// 上限に達しているなら、権利を取らずにここで返す。上限は24時間の窓が動くまで変わらないので、
+	// 毎回権利を取りにいくと、生成しないのに書き込みを伴う手順を繰り返し、同時リクエストには
+	// 「生成中」を返してFEにポーリングさせてしまう。ただしこれは先回りの確認で、
+	// 数えてから保存するまでの間に割り込まれうるため、下の権利を取った後の確認も必要(docs/adr/034)。
+	capped, err := s.latestIfGenerationCapped(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if capped != nil {
+		return ready(capped), nil
+	}
+
 	// ここから先は生成(10〜30秒)に入る。「確認」と「保存」の間に別のリクエストが割り込んで
 	// 二重に生成しないよう、生成する権利を取れた1件だけが進む(docs/adr/031)。
 	// 権利を取るUPDATEは、「他のリクエストが生成中」でも「usersの行が無い」でも0行になり、
@@ -174,18 +186,14 @@ func (s *AdviceService) GetLatest(ctx context.Context, userID string) (*LatestAd
 
 	// 24時間の上限回数に達していたら、目標が変わっていても生成せず、直前の提案を返す
 	// (docs/adr/034)。前の目標向けの提案になりうるが、それは上限まで作り直した場合だけである。
-	// 数えるのは権利を取った後にする。取る前に数えると、数えてから保存するまでの間に
-	// 別のリクエストが割り込み、上限を超えて生成できてしまう(docs/adr/031と同じ競合)。
-	generatedCount, err := s.repo.CountGeneratedSince(genCtx, userID, adviceFreshWindow)
+	// 権利を取った後の確認が、上限を守る本体である。権利を取る前の確認だけだと、数えてから
+	// 保存するまでの間に別のリクエストが割り込み、上限を超えて生成できてしまう(docs/adr/031と同じ競合)。
+	capped, err = s.latestIfGenerationCapped(genCtx, userID)
 	if err != nil {
 		return nil, err
 	}
-	if generatedCount >= maxAdviceGenerationsPerWindow {
-		latest, err := s.repo.GetLatestByUser(genCtx, userID)
-		if err != nil {
-			return nil, err
-		}
-		return ready(latest), nil
+	if capped != nil {
+		return ready(capped), nil
 	}
 
 	generated, err := s.generate(genCtx, userID, goal)
@@ -218,6 +226,27 @@ func (s *AdviceService) latestIfFresh(ctx context.Context, userID, goalID string
 	// goal_idがNULLの提案は、どの目標向けか確認できないので「違う」扱いにして再生成する。
 	if latest.GoalID == nil || *latest.GoalID != goalID {
 		return nil, nil
+	}
+	return latest, nil
+}
+
+// latestIfGenerationCapped は、直近24時間の生成が上限(maxAdviceGenerationsPerWindow)に達していれば、
+// 直前の提案を返す。上限に達していない場合は(nil, nil)を返す(=生成してよい)。
+// 提案が1件も無い場合も、上限には達していないので(nil, nil)を返す。
+func (s *AdviceService) latestIfGenerationCapped(ctx context.Context, userID string) (*model.Advice, error) {
+	count, err := s.repo.CountGeneratedSince(ctx, userID, adviceFreshWindow)
+	if err != nil {
+		return nil, err
+	}
+	if count < maxAdviceGenerationsPerWindow {
+		return nil, nil
+	}
+	latest, err := s.repo.GetLatestByUser(ctx, userID)
+	if err != nil {
+		if errors.Is(err, repository.ErrNotFound) {
+			return nil, nil
+		}
+		return nil, err
 	}
 	return latest, nil
 }
