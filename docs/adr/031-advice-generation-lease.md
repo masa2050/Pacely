@@ -115,9 +115,10 @@ WHERE id = $1 AND (advice_lock_until IS NULL OR advice_lock_until < now())
 - FEは、記録・目標の初回読み込みが終わってから`AdviceView`を表示するため、AI提案の表示が
   その分だけ遅れる。`AdviceView`の`key`に`runs.length`を残しているのは、記録の追加や目標の
   変更に応じて提案を取り直すためで、生成中に取り直されても、権利があるので二重生成にはならない
-- CIには`go test`も、DBを使うテストも入っていない(`TEST_DATABASE_URL`が無いとスキップ)。
-  この排他制御のテストは、現状は手元のローカルDBでだけ動く。CIにPostgreSQLを立てて実行する
-  のは、別のタスクとして行う
+- このADRを書いた時点では、CIには`go test`も、DBを使うテストも入っておらず(`TEST_DATABASE_URL`が
+  無いとスキップ)、この排他制御のテストは、手元のローカルDBでだけ動いていた。
+  **後日の補足**: ADR033で、CIにPostgreSQLを立て、このテストを毎回実行するようにした。CIで
+  `TEST_DATABASE_URL`が無い場合は、スキップではなく失敗にしている
 - `GET /advices/latest`のレスポンスに新しい`status`の値が増えるため、`docs/api.md`と
   `docs/database.md`を更新する
 - リースの期限(3分)より生成が長引いた場合は、別のリクエストが権利を取れてしまう。ただし、
