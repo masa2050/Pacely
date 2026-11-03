@@ -22,3 +22,6 @@ Aのgolang-migrate CLIを採用する。
 ## 影響
 - マイグレーション適用は手動コマンド実行(`migrate -path migrations -database "$DATABASE_URL" up`)。CI/CDに組み込む場合は別途スクリプト化が必要(フェーズ6で検討)
 - SQLを直接書くため、DB方言(PostgreSQL固有の型・構文)への理解がそのまま問われる
+
+## 後日の補足
+- 本番への自動適用を検討した結果、当面は手動運用を続けることにした(docs/adr/032)
