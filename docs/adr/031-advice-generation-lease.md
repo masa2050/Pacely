@@ -129,4 +129,6 @@ WHERE id = $1 AND (advice_lock_until IS NULL OR advice_lock_until < now())
   「AI1回・保存1件」になることで確認する
 - このADRの範囲外(別のADRで扱う)
   - 目標を変えても、24時間以内は古い目標向けの提案が返る問題(9-6 課題B)
+    **後日の補足**: docs/adr/034で対応した。手順2・4の「最新の提案が24時間以内か」の確認
+    (`latestIfFresh`)に、`goal_id`が現在の目標と一致するかの条件を足した
   - GETと生成(POST)の分離
