@@ -47,12 +47,18 @@ func (noWeather) CurrentWeather(context.Context, string) (model.WeatherContext, 
 	return model.WeatherContext{}, nil
 }
 
-// newTestPool はローカルDBへの接続を返す。TEST_DATABASE_URLが無ければスキップする
-// (CIにはDBが無いため)。本番DBに誤って繋がないよう、ホストがlocalhost以外なら失敗させる。
+// newTestPool はテスト用DBへの接続を返す。TEST_DATABASE_URLが無ければ、ローカルではスキップする
+// (DBを立てていない人でもgo testを通せるように)。ただしCI(CI=true、GitHub Actionsが自動で設定)
+// では、DBのサービスコンテナがあるはずなので、スキップせず失敗させる。スキップを許すと、
+// 環境変数の書き間違いで排他制御のテストが黙って外れ、CIが緑のままになる(docs/adr/033)。
+// 本番DBに誤って繋がないよう、ホストがlocalhost以外なら失敗させる。
 func newTestPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
+		if os.Getenv("CI") == "true" {
+			t.Fatal("CIではTEST_DATABASE_URLが必須です。DBを使うテストをスキップさせないため、失敗にしています")
+		}
 		t.Skip("TEST_DATABASE_URL が未設定のためスキップ(ローカルDBが必要)")
 	}
 	u, err := url.Parse(dsn)

@@ -28,6 +28,60 @@ jobs:
       - name: Vet
         run: go vet ./...
 
+  # docs/adr/033: DBを使うテストと、マイグレーションの検証をCIで毎回実行する。
+  # PostgreSQLはこのジョブの実行中だけ起動する使い捨てのコンテナで、本番のSupabaseには
+  # 接続しない。パスワードもこのコンテナ専用の値(秘密情報ではない)。
+  # 本番DBへのマイグレーションの適用は手動のまま(docs/adr/032)。
+  backend-test:
+    name: Backend (Go test with PostgreSQL)
+    runs-on: ubuntu-latest
+    # DBやマイグレーションが固まったときに、GitHubの既定(6時間)まで走り続けないようにする。
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: pacely
+          POSTGRES_PASSWORD: pacely_ci_pw
+          POSTGRES_DB: pacely
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U pacely -d pacely"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgres://pacely:pacely_ci_pw@localhost:5432/pacely?sslmode=disable
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: backend/go.mod
+          # go.sumはbackend/にあるため、キャッシュの対象を明示する(既定はリポジトリ直下を探す)。
+          cache-dependency-path: backend/go.sum
+
+      # ローカルで使っているのと同じバージョンに固定する。
+      - name: Install migrate
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.20.1
+
+      # up → down -all → up で、すべてのdownのファイルが動くことも確かめる。
+      - name: Verify migrations (up, down, up)
+        run: |
+          MIGRATE="$(go env GOPATH)/bin/migrate"
+          "$MIGRATE" -path migrations -database "$TEST_DATABASE_URL" up
+          "$MIGRATE" -path migrations -database "$TEST_DATABASE_URL" down -all
+          "$MIGRATE" -path migrations -database "$TEST_DATABASE_URL" up
+
+      # -vで各テストの結果をログに出し、DBを使うテストが実際に実行されたことを目で確認できるようにする。
+      # TEST_DATABASE_URLが空だと、テスト側(newTestPool)がCIでは失敗にする。
+      - name: Test
+        run: go test ./... -count=1 -v
+
   frontend:
     name: Frontend (lint & build)
     runs-on: ubuntu-latest

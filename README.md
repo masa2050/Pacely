@@ -65,7 +65,7 @@ PC幅では記録・目標/進捗・AI提案の3カラム、スマホ幅では�
 | 天候 | OpenWeatherMap API | 無料枠が大きい |
 | マイグレーション | golang-migrate | up/downをSQLで管理（[ADR 006](docs/adr/006-migration-tool-golang-migrate.md)） |
 | デプロイ | Vercel (FE) / Railway (BE) / Supabase (DB) | すべて無料枠中心で運用 |
-| CI | GitHub Actions | push/PR時に`go build`・`go vet`・lint・buildを自動実行 |
+| CI | GitHub Actions | push/PR時に`go build`・`go vet`・`go test`(PostgreSQL上)・マイグレーション検証・lint・buildを自動実行 |
 
 ## システム構成
 
@@ -200,4 +200,4 @@ cd frontend && npm install && npm run dev
 - 1機能ごとにバックエンド+フロントエンドをセットで完成させ、フェーズ単位で動作確認する
 - 技術選定・設計判断を行った時点で、背景・検討した選択肢・決定・理由をADRとして残す
 - コード変更は`feature/xxx`ブランチで作業し、PRに変更理由を書いてからマージする
-- マージ前にCI（build・vet・lint）とコードレビューを通す
+- マージ前にCI（build・vet・test・lint）とコードレビューを通す
