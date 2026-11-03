@@ -270,7 +270,9 @@ export type Advice = {
 
 // GET /advices/latest はAI呼び出しをスキップした場合(記録不足・目標未設定)も
 // 200で返ってくる(docs/api.md 3.)。statusでフロント側の表示を分岐する。
-export type AdviceStatus = 'ready' | 'needs_more_runs' | 'needs_active_goal'
+// 'generating'は、同じユーザーの別のリクエストが生成中(docs/adr/031)。adviceは含まれず、
+// 呼び出し側は少し待ってから取り直す。
+export type AdviceStatus = 'ready' | 'needs_more_runs' | 'needs_active_goal' | 'generating'
 
 export type LatestAdviceResult = {
   status: AdviceStatus

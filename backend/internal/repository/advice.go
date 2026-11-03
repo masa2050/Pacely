@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -43,6 +44,50 @@ func (r *AdviceRepository) Create(ctx context.Context, advice *model.Advice) (*m
 		 RETURNING `+adviceColumns,
 		advice.UserID, advice.GoalID, advice.AdviceText, advice.NextMenu, advice.WeatherContext)
 	return scanAdvice(row)
+}
+
+// TryAcquireGenerationLease は「今からleaseの間、このユーザーのAI提案を生成する権利」を
+// 取りにいく(docs/adr/031)。取得できたらtrue、他のリクエストが生成中ならfalse。
+// 「空いているか確認する」と「予約を書き込む」を1文のUPDATEで同時に行うのが要点で、
+// 2つのリクエストが同時に来ても、PostgreSQLが行ロックで順番に処理し、先に来た方だけが
+// 1行更新に成功する。確認と書き込みを別のSQLに分けると、その隙間に割り込まれて
+// 二重に取得できてしまう(check-then-act競合)。
+// 権利は期限付きなので、生成の途中でサーバーが落ちても、期限が過ぎれば別のリクエストが取れる。
+//
+// 取得できた場合は、その権利を表すGenerationLeaseを返す。他のリクエストが生成中なら(nil, nil)。
+// 「他のリクエストが生成中」と「usersの行が無い」はどちらも更新が0行になり区別できないため、
+// 呼び出し側は先にusersの行の存在を保証しておくこと。
+func (r *AdviceRepository) TryAcquireGenerationLease(ctx context.Context, userID string, lease time.Duration) (*GenerationLease, error) {
+	var until time.Time
+	err := r.pool.QueryRow(ctx,
+		`UPDATE users
+		 SET advice_lock_until = now() + make_interval(secs => $2)
+		 WHERE id = $1 AND (advice_lock_until IS NULL OR advice_lock_until < now())
+		 RETURNING advice_lock_until`,
+		userID, lease.Seconds()).Scan(&until)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &GenerationLease{userID: userID, until: until}, nil
+}
+
+// GenerationLease は取得済みの生成の権利。取得時に書き込んだ期限を持ち、返すときの本人確認に使う。
+type GenerationLease struct {
+	userID string
+	until  time.Time
+}
+
+// ReleaseGenerationLease は生成の権利を返す(期限を待たずに、次のリクエストが取れるようにする)。
+// 「自分が取ったときの期限と一致する場合だけ」消す。生成が長引いて期限が切れ、別のリクエストが
+// 新しく権利を取っている場合に、その人の権利まで消してしまわないため。
+func (r *AdviceRepository) ReleaseGenerationLease(ctx context.Context, lease *GenerationLease) error {
+	_, err := r.pool.Exec(ctx,
+		`UPDATE users SET advice_lock_until = NULL WHERE id = $1 AND advice_lock_until = $2`,
+		lease.userID, lease.until)
+	return err
 }
 
 // GetLatestByUser は最新のadviceを1件取得する(docs/database.md 3.4)。

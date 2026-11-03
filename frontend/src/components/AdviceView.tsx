@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { getLatestAdvice, type Advice, type LatestAdviceResult } from '../lib/api'
 import { AdviceCard } from './AdviceCard'
 import { toUserMessage } from '../lib/errors'
@@ -9,6 +9,11 @@ import { ErrorRetry } from './ErrorRetry'
 // 最大約70秒かかる。
 // この閾値を超えても返ってこない場合は「新規生成中の可能性が高い」とみなして表示を切り替える。
 const SLOW_THRESHOLD_MS = 3000
+
+// 別のリクエストが生成中(status=generating)のときの取り直しの間隔と上限回数。
+// 40回 × 3秒 = 約2分で、BEの生成の最悪値(約100秒、docs/adr/031)より長い。
+const GENERATING_POLL_MS = 3000
+const GENERATING_MAX_POLLS = 40
 
 type Props = {
   onHistoryClick: () => void
@@ -40,22 +45,60 @@ export function AdviceView({ onHistoryClick, canGenerate }: Props) {
   // 初回はuseEffectからload()だけを呼ぶ。loading/errorの初期値が既に「読み込み中・エラー無し」
   // なので、effect内で同期的にsetStateする必要がない(lintのset-state-in-effect対策)。
   // リトライ時だけfetchLatest()(ボタン押下時も同じ)で表示を「読み込み中」に戻してから取り直す(フェーズ9-4)。
-  function load() {
+  //
+  // BEが status=generating を返したとき(同じユーザーの別のリクエストが生成中、docs/adr/031)は、
+  // 結果が出ていないので読み込み中のまま、GENERATING_POLL_MS後に取り直す。取り直しは
+  // 最大GENERATING_MAX_POLLS回までとし、超えたら再読み込みボタン付きのエラーにする。
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  // 取得の「世代番号」。start()のたびに1つ進め、画面を離れるときも進める。load()は自分が
+  // 始まったときの番号を持ち回り、応答が返った時点で番号が違えば(=もう古い取得なら)何もしない。
+  // StrictModeの2回マウントや、再読み込みで取得をやり直したときに、先に始めた取得の応答や
+  // ポーリングが生き残って並走するのを防ぐ(/code-review指摘)。
+  const generation = useRef(0)
+
+  function load(myGeneration: number, attempt = 0) {
     getLatestAdvice()
-      .then(setResult)
-      .catch((err) => setError(toUserMessage(err)))
-      .finally(() => setLoading(false))
+      .then((res) => {
+        if (myGeneration !== generation.current) return
+        if (res.status === 'generating') {
+          if (attempt >= GENERATING_MAX_POLLS) {
+            setError('AI提案の生成に時間がかかっています。しばらくしてから再読み込みしてください')
+            setLoading(false)
+            return
+          }
+          pollTimer.current = setTimeout(() => load(myGeneration, attempt + 1), GENERATING_POLL_MS)
+          return
+        }
+        setResult(res)
+        setLoading(false)
+      })
+      .catch((err) => {
+        if (myGeneration !== generation.current) return
+        setError(toUserMessage(err))
+        setLoading(false)
+      })
+  }
+
+  // 新しい取得を始める。それまでの取得(待機中のタイマーと、まだ返っていない応答)は無効にする。
+  function start() {
+    generation.current += 1
+    clearTimeout(pollTimer.current)
+    load(generation.current)
   }
 
   function fetchLatest() {
     setLoading(true)
     setError(null)
     setSlow(false)
-    load()
+    start()
   }
 
   useEffect(() => {
-    load()
+    start()
+    return () => {
+      generation.current += 1
+      clearTimeout(pollTimer.current)
+    }
   }, [])
 
   // 読み込み中だけタイマーを動かす。setSlow(true)はタイマーのコールバック(非同期)からのみ
